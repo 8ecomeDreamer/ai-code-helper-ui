@@ -1,7 +1,9 @@
 import axios from 'axios'
 
 // 配置axios基础URL
-const API_BASE_URL = 'http://localhost:8081/api'
+const API_BASE_URL =  process.env.NODE_ENV === 'production'
+    ? '/api' // 生产环境使用相对路径，适用于前后端部署在同一域名下
+    : 'http://localhost:8081/api' // 开发环境指向本地后端服务
 
 /**
  * 使用 SSE 方式调用聊天接口
@@ -18,10 +20,10 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
         memoryId: memoryId,
         message: message
     })
-    
+
     // 创建 EventSource 连接
     const eventSource = new EventSource(`${API_BASE_URL}/ai/chat?${params}`)
-    
+
     // 处理接收到的消息
     eventSource.onmessage = function(event) {
         try {
@@ -34,7 +36,7 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
             onError && onError(error)
         }
     }
-    
+
     // 处理错误
     eventSource.onerror = function(error) {
         console.log('SSE 连接状态:', eventSource.readyState)
@@ -45,19 +47,19 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
         } else {
             console.log('SSE 连接正常结束')
         }
-        
+
         // 确保连接关闭
         if (eventSource.readyState !== EventSource.CLOSED) {
             eventSource.close()
         }
     }
-    
+
     // 处理连接关闭
     eventSource.onclose = function() {
         console.log('SSE 连接已关闭')
         onClose && onClose()
     }
-    
+
     return eventSource
 }
 
@@ -75,4 +77,4 @@ export async function checkServiceHealth() {
         console.error('服务健康检查失败:', error)
         return false
     }
-} 
+}
