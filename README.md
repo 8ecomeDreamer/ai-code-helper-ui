@@ -1,139 +1,169 @@
-# 🤖 AI‑Code‑Helper‑Frontend
+# AI 编程小助手 - 前端应用
 
->
-> AI‑Code‑Helper 后端配套前端项目
-> 基于 Vue3 + Vite 开发，为 LangChain4j AI 助手提供可视化对话界面
+基于 Vue 3 + Vite 构建的 AI 编程助手前端界面，配合 LangChain4j 后端 Agent 使用。
 
-## 🚀 项目亮点
+![Vue](https://img.shields.io/badge/Vue-3.3.4-4FC08D?logo=vue.js)
+![Vite](https://img.shields.io/badge/Vite-4.4.9-646CFF?logo=vite)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
-- 💬 **AI 智能对话**：支持普通问答、流式打字机回复效果
-- 🛡️ **安全提示展示**：后端安全护栏拦截后，前端展示风险提示
-- 📚 **知识库问答**：上传 PDF 文件，基于私有文档进行问答
-- 🔗 **RESTful 请求**：对接后端 `/api` 接口，前后端完全分离
-- 🎨 **简洁响应式 UI**：适配电脑浏览器，聊天窗口布局清爽易用
+## 功能特性
 
-## 🛠️ 技术架构
+- 💬 **实时对话**：使用 SSE (Server-Sent Events) 实现流式响应，打字机效果
+- 🤖 **AI 编程助手**：专注解答编程学习和求职面试相关问题
+- 📝 **Markdown 支持**：代码高亮、列表、表格等丰富格式渲染
+- 📱 **响应式设计**：适配桌面和移动端
+- 🎨 **简洁界面**：清新现代的 UI 设计
 
-表格
+## 技术栈
 
-| 组件 | 版本 / 说明 |
-| --- | --- |
-| 前端框架 | Vue 3 |
-| 构建工具 | Vite |
-| 语言 | TypeScript（可选） |
-| UI 组件库 | Element‑Plus / Vant |
-| HTTP 请求 | Axios |
-| 样式方案 | SCSS / TailwindCSS |
-| 对接后端 | AI‑Code‑Helper(SpringBoot) |
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| Vue | 3.3.4 | 前端框架 |
+| Vite | 4.4.9 | 构建工具 |
+| Axios | 1.5.0 | HTTP 客户端 |
+| Marked | 16.0.0 | Markdown 渲染 |
 
-## 📁 项目结构
+## 快速开始
 
-```
-ai-code-helper-frontend/
-├── public/                 # 静态资源
-├── src/
-│   ├── api/                # 后端接口请求封装
-│   │   └── chat.ts         # 对话、知识库上传接口
-│   ├── components/         # 公共组件
-│   │   ├── ChatBox.vue     # 聊天窗口组件
-│   │   ├── MessageItem.vue# 单条消息渲染
-│   │   └── UploadPdf.vue   # PDF上传组件
-│   ├── views/              # 页面视图
-│   │   └── Chat.vue        # AI对话主页
-│   ├── router/             # 路由配置
-│   ├── store/              # Pinia状态管理（聊天记录）
-│   ├── App.vue
-│   └── main.ts
-├── .env.development        # 本地环境变量
-├── .env.production         # 生产环境变量
-├── package.json
-└── vite.config.ts
-```
+### 环境要求
 
-## ⚙️ 环境配置指南
+- Node.js >= 16
+- npm 或 yarn
 
-### 1、环境变量配置
+### 安装依赖
 
->
-> 后端统一上下文路径为 `/api`
-
-**.env.development（本地开发）**
-
-```
-# 本地后端地址
-VITE_API_BASE_URL=http://127.0.0.1:8081/api
-```
-
-**.env.production（微信云托管部署）**
-
-```
-# 云托管后端域名，后面带上/api
-VITE_API_BASE_URL=https://你的云托管域名/api
-```
-
->
-> ⚠️ 前后端部署常见坑：后端端口生产环境为 **80**；生产接口地址不要带上 `:8081` 端口号
-
-## ▶️ 启动方式
-
-### 1、安装依赖
-
-```
+```bash
 npm install
 ```
 
-### 2、本地开发运行
+### 开发模式
 
-```
+```bash
 npm run dev
 ```
 
-访问控制台给出的本地地址即可打开聊天页面。
+默认启动在 http://localhost:3000
 
-### 3、打包生产构建
+### 生产构建
 
-```
+```bash
 npm run build
 ```
 
-打包完成后 `dist` 文件夹即为可部署产物，可以上传至静态网站服务器、微信云托管静态资源、Nginx。
+构建产物在 `dist/` 目录
 
-## 🔌 后端接口约定
+## 项目结构
 
->
-> 后端项目：AI‑Code‑Helper
-> 基础路径前缀：`/api`
+```
+ai-code-helper-ui/
+├── index.html              # 入口 HTML
+├── package.json            # 项目配置
+├── vite.config.js          # Vite 配置
+├── src/
+│   ├── main.js             # 应用入口
+│   ├── App.vue             # 根组件
+│   ├── api/
+│   │   └── chatApi.js      # 聊天 API 封装 (SSE)
+│   ├── components/
+│   │   ├── ChatInput.vue   # 消息输入组件
+│   │   ├── ChatMessage.vue # 消息展示组件
+│   │   └── LoadingDots.vue # 加载动画组件
+│   └── utils/
+│       └── index.js        # 工具函数
+└── README.md
+```
 
-表格
+## 后端接口配置
 
-| 接口 | 请求方式 | 功能说明 |
-| --- | --- | --- |
-| `/chat/stream` | POST | 流式对话接口 |
-| `/chat/normal` | POST | 普通问答接口 |
-| `/knowledge/upload` | POST | 上传 PDF 知识库文档 |
+编辑 `src/api/chatApi.js` 配置后端地址：
 
-## 🐞 踩坑日志 & 避坑清单
+```javascript
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+    ? '/api'                              // 生产环境
+    : 'http://localhost:8081/api'         // 开发环境
+```
 
-表格
+### 接口规范
 
-| 问题类型 | 解决方案 |
-| --- | --- |
-| 🔴 请求后端接口报跨域错误 | 开发环境后端配置 CORS 跨域；线上部署同源一般无跨域 |
-| 📡 流式响应无打字效果 | 使用 `EventSource` /fetch 读取 SSE 流，不要用普通 axios |
-| 📤 PDF 上传失败 | 检查后端文件存储路径、文件大小限制、文件编码 |
-| ☁️ 云托管部署后接口 404 | 确认环境变量 `VITE_API_BASE_URL` 域名正确，末尾带上 `/api` |
-| 🛑 安全护栏拦截无提示 | 后端拦截会返回特定错误码，前端捕获后渲染风险提示文案 |
+前端通过 SSE 连接后端 `/api/ai/chat` 接口：
 
-## 📚 学习资源
+**请求方式**: `GET`  
+**参数**:
+- `memoryId` - 会话 ID
+- `message` - 用户消息
 
-- [Vue3 官方文档](https://cn.vuejs.org/)
-- [Vite 官方文档](https://cn.vitejs.dev/)
-- [后端 AI‑Code‑Helper](%E5%90%8E%E7%AB%AF%E4%BB%93%E5%BA%93%E5%9C%B0%E5%9D%80)
+**响应格式**: `text/event-stream`
 
->
-> 配套后端教程来源：鱼皮 LangChain4j Java AI 零基础实战教程
+后端需按 SSE 格式返回数据：
+```
+data: 第一段内容
 
-## 📄 协议与许可
+data: 第二段内容
 
-本项目采用 **MIT 协议** 开源，欢迎自由使用、修改、分发。
-如有问题或建议，欢迎提交 Issue 或 Pull Request！
+data: [DONE]
+```
+
+## 部署说明
+
+### 腾讯云开发 (CloudBase)
+
+本项目已配置支持腾讯云开发部署：
+
+```bash
+# 使用 CloudBase CLI 部署
+cloudbase hosting:deploy dist -e <环境ID>
+```
+
+### 静态服务器
+
+```bash
+npm run build
+npm run preview
+```
+
+## 与 LangChain4j 后端集成
+
+本前端项目配合 LangChain4j 开发的 Agent 应用使用：
+
+1. 启动 LangChain4j 后端服务（默认端口 8081）
+2. 确保后端支持 SSE 流式输出
+3. 配置前端 `API_BASE_URL` 指向后端地址
+4. 访问前端页面开始对话
+
+## 自定义配置
+
+### 修改端口
+
+编辑 `vite.config.js`：
+
+```javascript
+export default defineConfig({
+  server: {
+    port: 3000,      // 修改端口
+    host: true
+  }
+})
+```
+
+### 修改标题/图标
+
+编辑 `index.html`：
+
+```html
+<title>你的应用名称</title>
+<link rel="icon" href="...">
+```
+
+## 浏览器支持
+
+- Chrome / Edge 最新版
+- Firefox 最新版
+- Safari 最新版
+
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可证
+
+MIT License
