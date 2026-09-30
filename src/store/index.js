@@ -105,7 +105,6 @@ export const store = reactive({
 
   // 管理后台访问权限校验（跳转由调用方执行路由导航）
   openAdmin() {
-    return true
     if (!this.canUse(PERMISSION.ADMIN)) {
       this.notify('无管理后台访问权限，请联系管理员开通', 'error')
       return false

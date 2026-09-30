@@ -168,7 +168,6 @@ router.beforeEach(to => {
       query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {}
     }
   }
-  return true
 
   // 模块权限校验：无权限则提示并回到问答页
   const perm = to.meta.perm
