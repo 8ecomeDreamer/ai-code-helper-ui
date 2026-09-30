@@ -16,16 +16,17 @@ export default {
 .loading-dots {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 0;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 6px 2px;
+  color: var(--c-primary, #2f5496);
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background-color: #999;
+  background-color: currentColor;
   animation: bounce 1.4s infinite ease-in-out;
 }
 
@@ -39,12 +40,12 @@ export default {
 
 @keyframes bounce {
   0%, 80%, 100% {
-    transform: scale(0);
-    opacity: 0.5;
+    transform: scale(0.4);
+    opacity: 0.4;
   }
   40% {
     transform: scale(1);
     opacity: 1;
   }
 }
-</style> 
+</style>

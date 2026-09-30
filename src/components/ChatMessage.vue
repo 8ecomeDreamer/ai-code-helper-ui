@@ -1,28 +1,42 @@
 <template>
-  <div class="chat-message" :class="{ 'user-message': isUser, 'ai-message': !isUser }">
-    <div class="message-avatar">
-      <div class="avatar" :class="{ 'user-avatar': isUser, 'ai-avatar': !isUser }">
-        {{ isUser ? '我' : 'AI' }}
-      </div>
+  <div :class="['chat-message', isUser ? 'user-message' : 'ai-message']">
+    <div class="msg-avatar" :class="isUser ? 'user' : 'ai'">
+      <AppIcon :name="isUser ? 'user' : 'logo'" :size="16" />
     </div>
-    <div class="message-content">
-      <div class="message-bubble">
+    <div class="msg-main">
+      <div class="msg-bubble" :class="isUser ? 'user' : 'ai'">
         <!-- 用户消息使用普通文本 -->
-        <pre v-if="isUser" class="message-text">{{ message }}</pre>
-        <!-- AI回复使用Markdown渲染 -->
-        <div v-else class="message-markdown" v-html="renderedMessage"></div>
+        <pre v-if="isUser" class="msg-text">{{ message }}</pre>
+        <!-- AI 回复使用 Markdown 渲染 -->
+        <div v-else class="markdown-body" v-html="renderedMessage"></div>
       </div>
-      <div class="message-time">{{ formatTime(timestamp) }}</div>
+      <div class="msg-meta">
+        <span class="msg-time">{{ formatTime(timestamp) }}</span>
+        <template v-if="!isUser">
+          <button class="msg-action" title="复制内容" @click="copyContent">
+            <AppIcon name="copy" :size="13" />
+          </button>
+          <button
+            class="msg-action"
+            :title="speaking ? '停止朗读' : '朗读回复'"
+            @click="toggleSpeak"
+          >
+            <AppIcon :name="speaking ? 'stop' : 'speaker'" :size="13" />
+          </button>
+        </template>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import AppIcon from './AppIcon.vue'
 import { formatTime } from '../utils/index.js'
-import { marked } from 'marked'
+import { renderMarkdown, plainText } from '../utils/markdown.js'
 
 export default {
   name: 'ChatMessage',
+  components: { AppIcon },
   props: {
     message: {
       type: String,
@@ -33,30 +47,59 @@ export default {
       default: false
     },
     timestamp: {
-      type: Date,
-      default: () => new Date()
+      type: [Date, Number],
+      default: () => Date.now()
+    }
+  },
+  emits: ['notify'],
+  data() {
+    return {
+      speaking: false
     }
   },
   computed: {
     renderedMessage() {
-      if (this.isUser) {
-        return this.message
-      }
-      // 配置marked选项
-      marked.setOptions({
-        breaks: true, // 支持换行
-        gfm: true, // 支持GitHub风格的Markdown
-        sanitize: false, // 不过滤HTML（根据需要可以开启）
-        highlight: function(code, lang) {
-          // 可以在这里添加代码高亮功能
-          return code
-        }
-      })
-      return marked(this.message)
+      return renderMarkdown(this.message)
     }
   },
   methods: {
-    formatTime
+    formatTime,
+    async copyContent() {
+      try {
+        await navigator.clipboard.writeText(this.message)
+        this.$emit('notify', '已复制到剪贴板')
+      } catch (error) {
+        this.$emit('notify', '复制失败，请手动选择文本复制')
+      }
+    },
+    toggleSpeak() {
+      if (!('speechSynthesis' in window)) {
+        this.$emit('notify', '当前浏览器不支持语音朗读')
+        return
+      }
+      if (this.speaking) {
+        window.speechSynthesis.cancel()
+        this.speaking = false
+        return
+      }
+      const utterance = new SpeechSynthesisUtterance(plainText(this.message))
+      utterance.lang = 'zh-CN'
+      utterance.rate = 1
+      utterance.onend = () => {
+        this.speaking = false
+      }
+      utterance.onerror = () => {
+        this.speaking = false
+      }
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(utterance)
+      this.speaking = true
+    }
+  },
+  beforeUnmount() {
+    if (this.speaking && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
   }
 }
 </script>
@@ -64,240 +107,114 @@ export default {
 <style scoped>
 .chat-message {
   display: flex;
-  margin-bottom: 20px;
-  padding: 0 20px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
 .user-message {
-  justify-content: flex-end;
-  flex-direction: row;
+  flex-direction: row-reverse;
 }
 
-.user-message .message-avatar {
-  order: 2;
-}
-
-.user-message .message-content {
-  order: 1;
-}
-
-.ai-message {
-  justify-content: flex-start;
-  flex-direction: row;
-}
-
-.ai-message .message-avatar {
-  order: 1;
-}
-
-.ai-message .message-content {
-  order: 2;
-}
-
-.message-avatar {
-  display: flex;
-  align-items: flex-start;
-  margin: 0 10px;
-}
-
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+.msg-avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: bold;
-  color: white;
 }
 
-.user-avatar {
-  background-color: #007bff;
+.msg-avatar.ai {
+  color: #fff;
+  background: linear-gradient(135deg, #2f5496, #4a72c0);
+  box-shadow: 0 4px 10px rgba(47, 84, 150, 0.25);
 }
 
-.ai-avatar {
-  background-color: #6c757d;
+.msg-avatar.user {
+  color: var(--c-primary-strong);
+  background: linear-gradient(135deg, #e8eef8, #f3ecdf);
+  border: 1px solid rgba(47, 84, 150, 0.15);
 }
 
-.message-content {
-  max-width: 70%;
-  min-width: 100px;
+.msg-main {
+  display: flex;
+  flex-direction: column;
+  max-width: min(76%, 760px);
+  min-width: 120px;
 }
 
-.message-bubble {
+.user-message .msg-main {
+  align-items: flex-end;
+}
+
+.msg-bubble {
   padding: 12px 16px;
-  border-radius: 18px;
-  position: relative;
+  border-radius: 16px;
   word-wrap: break-word;
   word-break: break-word;
 }
 
-.user-message .message-bubble {
-  background-color: #007bff;
-  color: white;
-  border-bottom-right-radius: 4px;
+.msg-bubble.ai {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
+  border-top-left-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  color: var(--c-text);
 }
 
-.ai-message .message-bubble {
-  background-color: #f1f3f4;
-  color: #333;
-  border-bottom-left-radius: 4px;
+.msg-bubble.user {
+  background: linear-gradient(135deg, #2f5496, #4066ad);
+  border-top-right-radius: 6px;
+  box-shadow: 0 6px 16px rgba(47, 84, 150, 0.22);
+  color: #fff;
 }
 
-.message-text {
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.4;
-  white-space: pre-wrap;
+.msg-text {
   margin: 0;
-}
-
-/* Markdown样式 */
-.message-markdown {
   font-family: inherit;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
-.message-markdown h1,
-.message-markdown h2,
-.message-markdown h3,
-.message-markdown h4,
-.message-markdown h5,
-.message-markdown h6 {
-  margin: 0.5em 0;
-  font-weight: bold;
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 0 2px;
 }
 
-.message-markdown h1 { font-size: 1.5em; }
-.message-markdown h2 { font-size: 1.3em; }
-.message-markdown h3 { font-size: 1.2em; }
-.message-markdown h4 { font-size: 1.1em; }
-.message-markdown h5 { font-size: 1em; }
-.message-markdown h6 { font-size: 0.9em; }
-
-.message-markdown p {
-  margin: 0.5em 0;
+.msg-time {
+  font-size: 11px;
+  color: var(--c-text-3);
 }
 
-.message-markdown ul,
-.message-markdown ol {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
+.msg-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--c-text-3);
+  opacity: 0;
+  transition: all 0.15s ease;
 }
 
-.message-markdown li {
-  margin: 0.2em 0;
+.chat-message:hover .msg-action {
+  opacity: 1;
 }
 
-.message-markdown code {
-  background-color: rgba(0, 0, 0, 0.1);
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.9em;
-}
-
-.user-message .message-markdown code {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.message-markdown pre {
-  background-color: rgba(0, 0, 0, 0.1);
-  padding: 1em;
-  border-radius: 5px;
-  overflow-x: auto;
-  margin: 0.5em 0;
-}
-
-.user-message .message-markdown pre {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.message-markdown pre code {
-  background-color: transparent;
-  padding: 0;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.9em;
-}
-
-.message-markdown blockquote {
-  border-left: 4px solid #ccc;
-  padding-left: 1em;
-  margin: 0.5em 0;
-  font-style: italic;
-  color: #666;
-}
-
-.user-message .message-markdown blockquote {
-  border-left-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.message-markdown a {
-  color: #007bff;
-  text-decoration: underline;
-}
-
-.user-message .message-markdown a {
-  color: #b3d9ff;
-}
-
-.message-markdown table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0.5em 0;
-}
-
-.message-markdown th,
-.message-markdown td {
-  border: 1px solid #ddd;
-  padding: 0.5em;
-  text-align: left;
-}
-
-.message-markdown th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-
-.user-message .message-markdown th {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.message-markdown hr {
-  border: none;
-  border-top: 1px solid #ddd;
-  margin: 1em 0;
-}
-
-.user-message .message-markdown hr {
-  border-top-color: rgba(255, 255, 255, 0.3);
-}
-
-.message-time {
-  font-size: 12px;
-  color: #666;
-  margin-top: 4px;
-  padding: 0 4px;
-}
-
-.user-message .message-time {
-  text-align: right;
-}
-
-.ai-message .message-time {
-  text-align: left;
+.msg-action:hover {
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
 }
 
 @media (max-width: 768px) {
-  .message-content {
-    max-width: 85%;
-  }
-  
-  .chat-message {
-    padding: 0 10px;
+  .msg-main {
+    max-width: 86%;
   }
 }
-</style> 
+</style>
