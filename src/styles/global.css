@@ -97,10 +97,10 @@ kbd {
   background: #b9bfca;
 }
 
-/* Markdown 渲染统一样式 */
+/* Markdown 渲染统一样式（借鉴知识库产品排版：层级清晰的标题、Notion 风表格、深色代码块） */
 .markdown-body {
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: 14.5px;
+  line-height: 1.8;
   color: var(--c-text);
   word-wrap: break-word;
   word-break: break-word;
@@ -114,69 +114,125 @@ kbd {
   margin-bottom: 0;
 }
 
+/* 标题：h1/h2 带分隔线，h3 带靛蓝强调条 */
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4,
 .markdown-body h5,
 .markdown-body h6 {
-  margin: 0.9em 0 0.5em;
+  margin: 1.3em 0 0.6em;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: var(--c-text);
 }
 
-.markdown-body h1 { font-size: 1.45em; }
-.markdown-body h2 { font-size: 1.3em; }
-.markdown-body h3 { font-size: 1.18em; }
-.markdown-body h4 { font-size: 1.08em; }
+.markdown-body h1 {
+  font-size: 1.45em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.markdown-body h2 {
+  font-size: 1.28em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--c-border-soft);
+}
+
+.markdown-body h3 {
+  font-size: 1.14em;
+  padding-left: 10px;
+  border-left: 3px solid var(--c-primary);
+  line-height: 1.5;
+}
+
+.markdown-body h4 { font-size: 1.06em; }
 .markdown-body h5 { font-size: 1em; }
-.markdown-body h6 { font-size: 0.92em; }
+.markdown-body h6 { font-size: 0.92em; color: var(--c-text-2); }
 
 .markdown-body p {
-  margin: 0.6em 0;
+  margin: 0.7em 0;
+}
+
+/* 关键词强调：靛蓝染深色，突出答案要点 */
+.markdown-body strong {
+  font-weight: 600;
+  color: var(--c-primary-strong);
 }
 
 .markdown-body ul,
 .markdown-body ol {
-  margin: 0.6em 0;
-  padding-left: 1.4em;
+  margin: 0.7em 0;
+  padding-left: 1.6em;
 }
 
 .markdown-body li {
-  margin: 0.25em 0;
+  margin: 0.4em 0;
 }
 
+.markdown-body li::marker {
+  color: var(--c-primary);
+  font-weight: 600;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: 0.3em 0;
+}
+
+/* 行内代码：带边框的浅色 chip */
 .markdown-body code {
-  background: var(--c-primary-soft);
+  background: var(--c-primary-softer);
+  border: 1px solid rgba(47, 84, 150, 0.16);
   color: var(--c-primary-strong);
-  padding: 0.15em 0.45em;
+  padding: 0.14em 0.45em;
   border-radius: 6px;
-  font-family: Consolas, Monaco, 'Courier New', monospace;
-  font-size: 0.88em;
+  font-family: 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace;
+  font-size: 0.86em;
 }
 
+/* 代码块：深色面板 + 细滚动条 */
 .markdown-body pre {
-  background: #f6f8fb;
-  border: 1px solid var(--c-border-soft);
+  background: #212836;
+  border: 1px solid #2d3648;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   overflow-x: auto;
-  margin: 0.75em 0;
+  margin: 1em 0;
+  scrollbar-width: thin;
+  scrollbar-color: #45506b transparent;
+}
+
+.markdown-body pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+.markdown-body pre::-webkit-scrollbar-thumb {
+  background: #45506b;
+  border-radius: 3px;
 }
 
 .markdown-body pre code {
   background: transparent;
+  border: none;
   padding: 0;
-  color: #33415c;
+  color: #e6ebf5;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
+/* 引用：靛蓝渐变底 + 左侧强调条 */
 .markdown-body blockquote {
-  margin: 0.75em 0;
-  padding: 0.5em 1em;
+  margin: 1em 0;
+  padding: 0.7em 1.1em;
   border-left: 3px solid var(--c-primary);
-  background: var(--c-primary-softer);
+  background: linear-gradient(90deg, rgba(47, 84, 150, 0.08), rgba(47, 84, 150, 0.02));
   color: var(--c-text-2);
   border-radius: 0 10px 10px 0;
+}
+
+.markdown-body blockquote p {
+  margin: 0.3em 0;
 }
 
 .markdown-body a {
@@ -189,29 +245,48 @@ kbd {
   border-bottom-color: var(--c-primary);
 }
 
+/* 表格：圆角外框 + 表头淡靛蓝底 + 斑马纹/悬停行，仅保留横向分隔线 */
 .markdown-body table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  margin: 0.75em 0;
-  font-size: 13px;
+  margin: 1em 0;
+  font-size: 13.5px;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid var(--c-border);
-  padding: 6px 10px;
+  padding: 8px 14px;
   text-align: left;
+  border-bottom: 1px solid var(--c-border-soft);
 }
 
 .markdown-body th {
   background: var(--c-primary-softer);
+  color: var(--c-primary-strong);
   font-weight: 600;
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: rgba(33, 43, 63, 0.025);
+}
+
+.markdown-body tbody tr:hover {
+  background: var(--c-primary-softer);
 }
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid var(--c-border);
-  margin: 1em 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--c-border), transparent);
+  margin: 1.6em 0;
 }
 
 .markdown-body img {
