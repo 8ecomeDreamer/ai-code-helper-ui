@@ -10,7 +10,7 @@ export default defineConfig({
     // 与生产环境 Nginx 同域代理行为保持一致，避免跨域问题
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:8881',
         changeOrigin: true,
         // 代理属服务端转发，去掉 Origin 头，
         // 避免后端 CORS 校验拒绝（403 Invalid CORS request）
