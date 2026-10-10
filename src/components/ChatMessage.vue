@@ -140,12 +140,18 @@ export default {
 .msg-main {
   display: flex;
   flex-direction: column;
-  max-width: min(76%, 760px);
   min-width: 120px;
 }
 
 .user-message .msg-main {
+  max-width: min(76%, 760px);
   align-items: flex-end;
+}
+
+/* AI 回复采用知识库式文档流：不加气泡边框，长文平铺更易读 */
+.ai-message .msg-main {
+  flex: 1;
+  max-width: 860px;
 }
 
 .msg-bubble {
@@ -156,10 +162,10 @@ export default {
 }
 
 .msg-bubble.ai {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border-soft);
-  border-top-left-radius: 6px;
-  box-shadow: var(--shadow-sm);
+  padding: 3px 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
   color: var(--c-text);
 }
 

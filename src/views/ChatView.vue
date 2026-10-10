@@ -1,28 +1,36 @@
 <template>
-  <!-- 智能问答模块：空会话显示欢迎首页，有消息显示会话区 -->
+  <!-- 综合问答模块：基于纺织知识库问答，支持语音输入与图片识别 -->
   <div class="chat-view">
     <!-- 欢迎首页 -->
     <div v-if="!hasMessages && !streaming.active" class="welcome">
       <div class="hero scroll-thin">
         <div class="hero-badge">
           <AppIcon name="sparkle" :size="13" />
-          <span>纺织主题智能体</span>
+          <span>纺织主题智能体 · 综合问答</span>
         </div>
         <h1 class="hero-title">
           把纺织难题<br />
           变成<span class="grad">清晰答案</span>
         </h1>
         <p class="hero-sub">
-          面料识别、工艺参数、行业标准问答，支持语音与图片输入
+          依托纺织知识库，解答面料、工艺、行业标准等专业问题，支持语音输入与图片识别
         </p>
 
         <div class="hero-input">
+          <div v-if="attachment" class="attach-chip">
+            <AppIcon name="image" :size="14" />
+            <span class="attach-name">{{ attachment.name }}</span>
+            <small>发送后自动识别</small>
+            <button class="attach-remove" title="移除图片" @click="store.removeAttachment()">
+              <AppIcon name="x" :size="12" />
+            </button>
+          </div>
           <ChatInput
             :disabled="disabled"
             :mic-enabled="micEnabled"
             :image-enabled="imageEnabled"
             show-hint
-            @send-message="store.sendMessage($event)"
+            @send-message="handleSend"
             @attach-image="attachImage"
             @notify="(msg, type) => store.notify(msg, type)"
           />
@@ -75,7 +83,9 @@
         <ChatMessage
           v-for="message in messages"
           :key="message.id"
-          :message="message"
+          :message="message.content"
+          :is-user="message.role === 'user'"
+          :timestamp="message.timestamp"
           @notify="(msg, type) => store.notify(msg, type)"
         />
         <!-- AI 流式回复中 -->
@@ -99,13 +109,21 @@
       </div>
 
       <div class="chat-input-area">
+        <div v-if="attachment" class="attach-chip">
+          <AppIcon name="image" :size="14" />
+          <span class="attach-name">{{ attachment.name }}</span>
+          <small>发送后自动识别</small>
+          <button class="attach-remove" title="移除图片" @click="store.removeAttachment()">
+            <AppIcon name="x" :size="12" />
+          </button>
+        </div>
         <ChatInput
           ref="chatInputRef"
           :disabled="disabled"
           :mic-enabled="micEnabled"
           :image-enabled="imageEnabled"
-          placeholder="继续提问，或上传面料图片识别..."
-          @send-message="store.sendMessage($event)"
+          placeholder="继续提问纺织相关问题，或上传面料图片识别..."
+          @send-message="handleSend"
           @attach-image="attachImage"
           @notify="(msg, type) => store.notify(msg, type)"
         />
@@ -189,6 +207,10 @@ export default {
     },
     streamingMarkdown() {
       return renderMarkdown(this.streaming.content || '')
+    },
+    // 待识别图片附件
+    attachment() {
+      return store.pendingAttachment
     }
   },
   watch: {
@@ -204,11 +226,18 @@ export default {
     }
   },
   methods: {
-    // 图片预填成功后跳转图片识别路由
-    attachImage(file) {
-      if (store.attachImage(file)) {
-        this.$router.push({ name: 'image' })
+    // 发送：先内联识别待处理图片，再发送文本提问
+    async handleSend(text) {
+      if (store.pendingAttachment) {
+        await store.recognizePendingAttachment()
       }
+      if (text) {
+        store.sendMessage(text)
+      }
+    },
+    // 挂载图片后不再跳转，输入区显示 chip，发送时内联识别
+    attachImage(file) {
+      store.attachImage(file)
     },
     scrollToBottom() {
       this.$nextTick(() => {
@@ -290,6 +319,58 @@ export default {
   width: 100%;
   max-width: 720px;
   margin-top: 34px;
+}
+
+/* 待识别图片 chip */
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 auto 8px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  color: var(--c-primary-strong);
+  background: var(--c-primary-softer);
+  border: 1px solid rgba(47, 84, 150, 0.2);
+}
+
+.hero-input .attach-chip,
+.chat-input-area .attach-chip {
+  display: flex;
+  width: fit-content;
+}
+
+.attach-chip .attach-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.attach-chip small {
+  color: var(--c-text-3);
+  flex-shrink: 0;
+}
+
+.attach-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--c-text-3);
+  background: rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.attach-remove:hover {
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.1);
 }
 
 /* 建议卡片 */
@@ -465,10 +546,70 @@ export default {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 26px 0;
+  padding: 26px 22px;
   display: flex;
   flex-direction: column;
   gap: 26px;
+}
+
+/* AI 流式回复：与 ChatMessage 的 AI 消息同款文档流布局 */
+.message.ai {
+  display: flex;
+  gap: 12px;
+}
+
+.message.ai .avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #2f5496, #4a72c0);
+  box-shadow: 0 4px 10px rgba(47, 84, 150, 0.25);
+}
+
+.bubble-wrap {
+  flex: 1;
+  min-width: 0;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bubble.markdown-body {
+  padding: 3px 2px;
+}
+
+.bubble.thinking {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  padding: 12px 18px;
+  border-radius: 12px 12px 12px 4px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.streaming-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--c-primary);
+  background: rgba(47, 84, 150, 0.08);
 }
 
 .chat-input-area {
