@@ -1,10 +1,11 @@
 import { reactive } from 'vue'
-import { chatWithSSE } from '../api/chatApi.js'
+import { chatWithSSE, recognizeImage } from '../api/chatApi.js'
 import {
   loadAuth,
   saveAuth,
   clearAuth,
   getUserInfo,
+  getRouters,
   logout as apiLogout
 } from '../api/authApi.js'
 import {
@@ -32,6 +33,8 @@ export const store = reactive({
   // 登录态
   token: null,
   user: null,
+  // 后端动态菜单（/getRouters 返回的 RouterVo 树），空时管理后台回退本地菜单
+  menus: [],
   // 体验权限今日剩余提问次数（非体验用户为 null）
   quotaRemaining: null,
   // 会话列表
@@ -41,8 +44,8 @@ export const store = reactive({
   streaming: { active: false, content: '', received: false },
   streamingSessionId: null,
   currentEventSource: null,
-  // 跨模块图片预填（问答输入框 -> 图片识别页）
-  imagePrefill: null,
+  // 综合问答待识别图片附件（输入区 chip，发送时内联识别）
+  pendingAttachment: null,
   toasts: [],
 
   /* ---------- 计算属性 ---------- */
@@ -65,12 +68,14 @@ export const store = reactive({
           this.user = user
           saveAuth(this.token, user)
           this.refreshQuota()
+          this.fetchMenus()
         })
         .catch(error => {
           console.warn('[auth] 本地登录态已失效:', error.message)
           clearAuth()
           this.token = null
           this.user = null
+          this.menus = []
           this.quotaRemaining = null
         })
     }
@@ -90,7 +95,17 @@ export const store = reactive({
     this.user = user
     saveAuth(token, user)
     this.refreshQuota()
+    this.fetchMenus()
     this.notify(`欢迎，${user.nickname || user.username}`)
+  },
+
+  // 拉取后端动态菜单（失败时置空，由管理后台回退本地菜单）
+  async fetchMenus() {
+    if (!this.token) {
+      this.menus = []
+      return
+    }
+    this.menus = await getRouters(this.token)
   },
 
   async logout() {
@@ -98,6 +113,7 @@ export const store = reactive({
     await apiLogout(this.token)
     this.token = null
     this.user = null
+    this.menus = []
     this.quotaRemaining = null
     this.activeSessionId = null
     this.notify('已退出登录')
@@ -193,12 +209,13 @@ export const store = reactive({
       this.currentEventSource.close()
     }
 
+    // 用箭头函数包一层，保证回调内部 this 指向 store
     this.currentEventSource = chatWithSSE(
       session.memoryId,
       message,
-      this.handleAiMessage,
-      this.handleAiError,
-      this.handleAiClose
+      data => this.handleAiMessage(data),
+      error => this.handleAiError(error),
+      () => this.handleAiClose()
     )
   },
 
@@ -251,40 +268,64 @@ export const store = reactive({
     }
   },
 
-  /* ---------- 跨模块协作 ---------- */
-  // 返回是否成功预填（权限不足时返回 false，由调用方决定是否跳转）
+  /* ---------- 综合问答：语音 / 图片能力 ---------- */
+  // 挂接待识别图片（权限不足时返回 false）
   attachImage(file) {
     if (!this.canUse(PERMISSION.IMAGE)) {
       this.notify('当前账号权限未开放图片识别功能', 'error')
       return false
     }
-    this.imagePrefill = file
+    this.pendingAttachment = file
     return true
   },
 
-  saveImageResult({ fileName, result }) {
+  removeAttachment() {
+    this.pendingAttachment = null
+  },
+
+  // 发送时内联识别待处理图片：识别结果成对消息写入当前会话
+  async recognizePendingAttachment() {
+    const file = this.pendingAttachment
+    if (!file) return false
+    this.pendingAttachment = null
     this.finalizeIfStreaming()
+
     const session = this.ensureActiveSession()
     if (session.title === '新对话') {
-      session.title = `图片识别：${fileName}`.slice(0, 24)
+      session.title = `图片识别：${file.name}`.slice(0, 24)
     }
-    session.messages.push(
-      {
-        id: uid(),
-        role: 'user',
-        content: `请识别这张图片的内容：${fileName}`,
-        timestamp: Date.now()
-      },
-      {
-        id: uid(),
-        role: 'ai',
-        content: result,
-        timestamp: Date.now()
-      }
-    )
+    session.messages.push({
+      id: uid(),
+      role: 'user',
+      content: `请识别这张图片的内容：${file.name}`,
+      timestamp: Date.now()
+    })
     session.updatedAt = Date.now()
     this.persist()
-    this.notify('识别结果已存入问答记录')
+
+    try {
+      const result = await recognizeImage(file)
+      session.messages.push({
+        id: uid(),
+        role: 'ai',
+        content: result || '识别完成，但后端未返回内容',
+        timestamp: Date.now()
+      })
+      this.notify('图片识别完成')
+    } catch (error) {
+      console.error('图片识别失败:', error)
+      session.messages.push({
+        id: uid(),
+        role: 'ai',
+        content:
+          '> ⚠️ 图片识别服务暂不可用：后端 `/api/ai/image/recognize` 接口未就绪，待后端对接后即可在对话内直接识别图片。',
+        timestamp: Date.now()
+      })
+      this.notify('识别服务连接失败，待后端对接', 'error')
+    }
+    session.updatedAt = Date.now()
+    this.persist()
+    return true
   },
 
   exportCurrent() {

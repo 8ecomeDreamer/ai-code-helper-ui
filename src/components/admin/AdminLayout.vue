@@ -107,6 +107,82 @@
 import AppIcon from '../AppIcon.vue'
 import { store } from '../../store/index.js'
 
+// 后端菜单 path -> 后台页路由名（见 router 的 /admin 子路由）
+const AGENT_MENU_ROUTES = {
+  chat: 'admin-agent-chat',
+  knowledge: 'admin-knowledge',
+  prompt: 'admin-agent-prompt',
+  vector: 'admin-agent-vector',
+  model: 'admin-agent-model',
+  agentLog: 'admin-agent-log'
+}
+
+// 后端菜单 icon（sys_menu.icon）-> AppIcon 名称
+const MENU_ICON_MAP = {
+  ai: 'sparkle',
+  message: 'chat',
+  book: 'file',
+  edit: 'bulb',
+  database: 'database',
+  cpu: 'settings',
+  log: 'tasks'
+}
+
+// 静态菜单：设置组（前端控制台页，后端菜单不下发）
+const SETTINGS_ITEMS = [
+  { route: 'admin-users', label: '用户管理', icon: 'users' },
+  { route: 'admin-questions', label: '示例问题', icon: 'bulb' },
+  { route: 'admin-settings', label: '系统设置', icon: 'settings' }
+]
+
+// 本地回退菜单：后端动态菜单不可用（未接入/接口失败）时的演示导航
+const LOCAL_NAV = [
+  {
+    label: '导航',
+    items: [
+      { route: 'admin-dashboard', label: 'Dashboard', icon: 'grid' },
+      { route: 'admin-knowledge', label: '知识库管理', icon: 'database' },
+      { route: 'admin-intents', label: '意图管理', icon: 'layers' },
+      {
+        key: 'channel',
+        label: '数据通道',
+        icon: 'flow',
+        children: [
+          { route: 'admin-pipelines', label: '流水线管理', icon: 'flow' },
+          { route: 'admin-tasks', label: '流水线任务', icon: 'tasks' }
+        ]
+      },
+      { route: 'admin-keywords', label: '关键词映射', icon: 'key' },
+      { route: 'admin-traces', label: '链路追踪', icon: 'trace' }
+    ]
+  },
+  { label: '设置', items: SETTINGS_ITEMS }
+]
+
+// 由后端动态菜单（若依 RouterVo 树）生成后台导航；无可用菜单时返回 null 触发回退
+function buildDynamicNav(menus) {
+  if (!Array.isArray(menus) || !menus.length) return null
+  const items = []
+  menus.forEach(top => {
+    ;(top.children || []).forEach(child => {
+      const route = AGENT_MENU_ROUTES[child.path]
+      if (!route) return
+      const meta = child.meta || {}
+      items.push({
+        route,
+        label: meta.title || child.name || child.path,
+        icon: MENU_ICON_MAP[meta.icon] || 'grid'
+      })
+    })
+  })
+  if (!items.length) return null
+  return [
+    { label: '导航', items: [{ route: 'admin-dashboard', label: 'Dashboard', icon: 'grid' }] },
+    { label: '纺织智能体', items },
+    { label: '设置', items: SETTINGS_ITEMS }
+  ]
+}
+
 export default {
   name: 'AdminLayout',
   components: { AppIcon },
@@ -114,41 +190,16 @@ export default {
     return {
       collapsed: false,
       navKeyword: '',
-      openKeys: { channel: true },
-      nav: [
-        {
-          label: '导航',
-          items: [
-            { route: 'admin-dashboard', label: 'Dashboard', icon: 'grid' },
-            { route: 'admin-knowledge', label: '知识库管理', icon: 'database' },
-            { route: 'admin-intents', label: '意图管理', icon: 'layers' },
-            {
-              key: 'channel',
-              label: '数据通道',
-              icon: 'flow',
-              children: [
-                { route: 'admin-pipelines', label: '流水线管理', icon: 'flow' },
-                { route: 'admin-tasks', label: '流水线任务', icon: 'tasks' }
-              ]
-            },
-            { route: 'admin-keywords', label: '关键词映射', icon: 'key' },
-            { route: 'admin-traces', label: '链路追踪', icon: 'trace' }
-          ]
-        },
-        {
-          label: '设置',
-          items: [
-            { route: 'admin-users', label: '用户管理', icon: 'users' },
-            { route: 'admin-questions', label: '示例问题', icon: 'bulb' },
-            { route: 'admin-settings', label: '系统设置', icon: 'settings' }
-          ]
-        }
-      ]
+      openKeys: { channel: true }
     }
   },
   computed: {
     user() {
       return store.user
+    },
+    // 后台导航：优先后端动态菜单，不可用时回退本地演示菜单
+    nav() {
+      return buildDynamicNav(store.menus) || LOCAL_NAV
     },
     avatarChar() {
       return store.user && store.user.nickname ? store.user.nickname.charAt(0) : 'A'

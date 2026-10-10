@@ -28,6 +28,99 @@ export const DASHBOARD_TRACES = [
 
 /* ---------------- 列表页配置 ---------------- */
 export const ADMIN_PAGES = {
+  /* 后端动态菜单（纺织智能体）对应页面 */
+  agentChat: {
+    title: 'Agent对话工作台',
+    subtitle: '最近对话会话与调用概览（演示数据）',
+    searchPlaceholder: '搜索会话 / 用户...',
+    searchKeys: ['session', 'username'],
+    columns: [
+      { key: 'session', label: '会话 ID', strong: true },
+      { key: 'username', label: '用户' },
+      { key: 'messages', label: '消息数' },
+      { key: 'intent', label: '主要意图' },
+      { key: 'active', label: '最近活跃' }
+    ],
+    rows: [
+      { session: 'sess-8f2a', username: 'user', messages: 18, intent: '面料识别', active: '09:42' },
+      { session: 'sess-7c1d', username: 'user', messages: 12, intent: '工艺参数', active: '09:37' },
+      { session: 'sess-6b9e', username: 'guest', messages: 4, intent: '行业标准', active: '09:31' },
+      { session: 'sess-5a4b', username: 'admin', messages: 26, intent: '面料识别', active: '09:24' }
+    ]
+  },
+  prompt: {
+    title: '提示词模板',
+    subtitle: '系统提示词模板版本与启用状态',
+    searchPlaceholder: '搜索模板 / 场景...',
+    searchKeys: ['name', 'scene'],
+    columns: [
+      { key: 'name', label: '模板名称', strong: true },
+      { key: 'scene', label: '场景' },
+      { key: 'version', label: '版本' },
+      { key: 'status', label: '状态' },
+      { key: 'updated', label: '更新时间' }
+    ],
+    rows: [
+      { name: 'textile-fabric-identify', scene: '面料识别', version: 'v3', status: { text: '启用', tag: 'ok' }, updated: '2026-09-26 14:20' },
+      { name: 'textile-process-qa', scene: '工艺问答', version: 'v2', status: { text: '启用', tag: 'ok' }, updated: '2026-09-22 10:08' },
+      { name: 'textile-standard-qa', scene: '标准问答', version: 'v2', status: { text: '启用', tag: 'ok' }, updated: '2026-09-22 10:02' },
+      { name: 'textile-chat-fallback', scene: '闲聊兜底', version: 'v1', status: { text: '观察', tag: 'warn' }, updated: '2026-09-18 17:45' }
+    ]
+  },
+  vector: {
+    title: '向量库管理',
+    subtitle: '向量空间集合与索引状态',
+    searchPlaceholder: '搜索 Collection...',
+    searchKeys: ['collection'],
+    columns: [
+      { key: 'collection', label: 'Collection', strong: true },
+      { key: 'docs', label: '文档数' },
+      { key: 'vectors', label: '向量数' },
+      { key: 'status', label: '状态' },
+      { key: 'rebuilt', label: '最近重建' }
+    ],
+    rows: [
+      { collection: 'textile_rag_store', docs: 1240, vectors: 15832, status: { text: '启用', tag: 'ok' }, rebuilt: '2026-09-28 03:00' },
+      { collection: 'textile_fabric_image', docs: 486, vectors: 6120, status: { text: '重建中', tag: 'warn' }, rebuilt: '2026-09-29 08:12' },
+      { collection: 'textile_standard_store', docs: 214, vectors: 3057, status: { text: '启用', tag: 'ok' }, rebuilt: '2026-09-27 03:00' }
+    ]
+  },
+  model: {
+    title: '模型配置',
+    subtitle: '大模型接入参数与启用状态',
+    searchPlaceholder: '搜索模型名称 / 编码...',
+    searchKeys: ['name', 'code'],
+    columns: [
+      { key: 'name', label: '模型名称', strong: true },
+      { key: 'code', label: '模型编码' },
+      { key: 'temperature', label: 'Temperature' },
+      { key: 'maxTokens', label: 'Max Tokens' },
+      { key: 'status', label: '状态' }
+    ],
+    rows: [
+      { name: 'DeepSeek-R1', code: 'deepseek-r1', temperature: '0.7', maxTokens: 8192, status: { text: '启用', tag: 'ok' } },
+      { name: 'qwen-max', code: 'qwen-max', temperature: '0.7', maxTokens: 2048, status: { text: '停用', tag: 'off' } }
+    ]
+  },
+  agentLog: {
+    title: 'AI调用日志',
+    subtitle: '模型调用审计明细（演示数据）',
+    searchPlaceholder: '搜索用户 / 意图...',
+    searchKeys: ['username', 'intent'],
+    columns: [
+      { key: 'time', label: '调用时间', strong: true },
+      { key: 'username', label: '用户' },
+      { key: 'intent', label: '意图' },
+      { key: 'cost', label: '耗时' },
+      { key: 'status', label: '状态' }
+    ],
+    rows: [
+      { time: '2026-09-29 09:42', username: 'user', intent: '面料识别', cost: '1.8s', status: { text: '成功', tag: 'ok' } },
+      { time: '2026-09-29 09:37', username: 'user', intent: '工艺参数', cost: '2.4s', status: { text: '成功', tag: 'ok' } },
+      { time: '2026-09-29 09:31', username: 'guest', intent: '行业标准', cost: '3.1s', status: { text: '超时', tag: 'err' } },
+      { time: '2026-09-29 09:24', username: 'admin', intent: '面料识别', cost: '1.6s', status: { text: '成功', tag: 'ok' } }
+    ]
+  },
   knowledge: {
     title: '知识库管理',
     subtitle: '纺织领域知识库与索引状态总览',

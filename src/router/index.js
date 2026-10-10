@@ -2,14 +2,22 @@ import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '../components/MainLayout.vue'
 import LoginView from '../views/LoginView.vue'
 import ChatView from '../views/ChatView.vue'
-import VoiceView from '../views/VoiceView.vue'
-import ImageView from '../views/ImageView.vue'
-import ExportView from '../views/ExportView.vue'
+import QuoteView from '../views/QuoteView.vue'
+import ResearchView from '../views/ResearchView.vue'
+import ComplianceView from '../views/ComplianceView.vue'
+import FabricView from '../views/FabricView.vue'
 import AdminLayout from '../components/admin/AdminLayout.vue'
 import AdminDashboard from '../components/admin/AdminDashboard.vue'
 import AdminListPage from '../components/admin/AdminListPage.vue'
 import AdminSettings from '../components/admin/AdminSettings.vue'
 import { ADMIN_PAGES } from '../components/admin/adminData.js'
+import {
+  KEYWORDS_API_PROPS,
+  MODEL_API_PROPS,
+  TRACES_API_PROPS,
+  PROMPT_API_PROPS,
+  AGENT_CHAT_API_PROPS
+} from '../components/admin/adminApiConfig.js'
 import { store } from '../store/index.js'
 import { hasPermission, ROLE_LABELS, MODULE_LABELS } from '../utils/permission.js'
 
@@ -17,10 +25,11 @@ import { hasPermission, ROLE_LABELS, MODULE_LABELS } from '../utils/permission.j
  * 路由表
  * - /login        登录页（公开）
  * - /             主布局（侧边栏 + 业务子路由）
- *   - /chat       智能问答
- *   - /voice      语音交互
- *   - /image      图片识别
- *   - /export     文档导出
+ *   - /chat        综合问答（含语音输入与图片识别）
+ *   - /quote       智能报价
+ *   - /research    竞品调研
+ *   - /compliance  合规校验
+ *   - /fabric      面料识别
  * - /admin        管理后台布局（仅 admin 权限，meta.perm 由子路由继承）
  *   - /admin/dashboard | knowledge | intents | pipelines | tasks
  *   - /admin/keywords | traces | users | questions | settings
@@ -45,22 +54,28 @@ const routes = [
         meta: { perm: 'chat' }
       },
       {
-        path: 'voice',
-        name: 'voice',
-        component: VoiceView,
-        meta: { perm: 'voice' }
+        path: 'quote',
+        name: 'quote',
+        component: QuoteView,
+        meta: { perm: 'quote' }
       },
       {
-        path: 'image',
-        name: 'image',
-        component: ImageView,
-        meta: { perm: 'image' }
+        path: 'research',
+        name: 'research',
+        component: ResearchView,
+        meta: { perm: 'research' }
       },
       {
-        path: 'export',
-        name: 'export',
-        component: ExportView,
-        meta: { perm: 'export' }
+        path: 'compliance',
+        name: 'compliance',
+        component: ComplianceView,
+        meta: { perm: 'compliance' }
+      },
+      {
+        path: 'fabric',
+        name: 'fabric',
+        component: FabricView,
+        meta: { perm: 'fabric' }
       }
     ]
   },
@@ -77,11 +92,47 @@ const routes = [
         component: AdminDashboard,
         meta: { title: 'Dashboard' }
       },
+      // 后端动态菜单（纺织智能体）对应页面，菜单可见性由 /getRouters 按角色下发
+      {
+        path: 'agent/chat',
+        name: 'admin-agent-chat',
+        component: AdminListPage,
+        meta: { title: 'Agent对话工作台', crumbGroup: '纺织智能体' },
+        props: { ...ADMIN_PAGES.agentChat, ...AGENT_CHAT_API_PROPS }
+      },
+      {
+        path: 'agent/prompt',
+        name: 'admin-agent-prompt',
+        component: AdminListPage,
+        meta: { title: '提示词模板', crumbGroup: '纺织智能体' },
+        props: { ...ADMIN_PAGES.prompt, ...PROMPT_API_PROPS }
+      },
+      {
+        path: 'agent/vector',
+        name: 'admin-agent-vector',
+        component: AdminListPage,
+        meta: { title: '向量库管理', crumbGroup: '纺织智能体' },
+        props: ADMIN_PAGES.vector
+      },
+      {
+        path: 'agent/model',
+        name: 'admin-agent-model',
+        component: AdminListPage,
+        meta: { title: '模型配置', crumbGroup: '纺织智能体' },
+        props: { ...ADMIN_PAGES.model, ...MODEL_API_PROPS }
+      },
+      {
+        path: 'agent/log',
+        name: 'admin-agent-log',
+        component: AdminListPage,
+        meta: { title: 'AI调用日志', crumbGroup: '纺织智能体' },
+        props: ADMIN_PAGES.agentLog
+      },
       {
         path: 'knowledge',
         name: 'admin-knowledge',
         component: AdminListPage,
-        meta: { title: '知识库管理' },
+        meta: { title: '知识库管理', crumbGroup: '纺织智能体' },
         props: ADMIN_PAGES.knowledge
       },
       {
@@ -110,14 +161,14 @@ const routes = [
         name: 'admin-keywords',
         component: AdminListPage,
         meta: { title: '关键词映射' },
-        props: ADMIN_PAGES.keywords
+        props: { ...ADMIN_PAGES.keywords, ...KEYWORDS_API_PROPS }
       },
       {
         path: 'traces',
         name: 'admin-traces',
         component: AdminListPage,
         meta: { title: '链路追踪' },
-        props: ADMIN_PAGES.traces
+        props: { ...ADMIN_PAGES.traces, ...TRACES_API_PROPS }
       },
       {
         path: 'users',

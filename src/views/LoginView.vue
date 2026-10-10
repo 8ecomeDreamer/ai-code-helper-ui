@@ -20,7 +20,7 @@
             v-model.trim="username"
             type="text"
             placeholder="用户名"
-            autocomplete="username"
+            autocomplete="off"
             :disabled="loading"
           />
         </label>
@@ -30,7 +30,7 @@
             v-model.trim="password"
             :type="showPassword ? 'text' : 'password'"
             placeholder="密码"
-            autocomplete="current-password"
+            autocomplete="off"
             :disabled="loading"
           />
           <button type="button" class="field-eye" @click="showPassword = !showPassword">

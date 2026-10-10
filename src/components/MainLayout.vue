@@ -34,7 +34,7 @@ export default {
     store() {
       return store
     },
-    // 当前业务模块 = 路由名（chat / voice / image / export）
+    // 当前业务模块 = 路由名（chat / quote / research / compliance / fabric）
     activeModule() {
       return this.$route.name || 'chat'
     }
