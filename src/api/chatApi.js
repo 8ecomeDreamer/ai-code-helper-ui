@@ -5,6 +5,22 @@ import axios from 'axios'
 // - 生产环境由 Nginx 同域转发到后端服务
 const API_BASE_URL = '/api'
 
+// 解析流式帧：兼容 JSON 帧（{"d":"增量文本"}，可携带换行/空白）与纯文本帧（真实后端逐 token 下发）。
+// SSE 规范会剥离帧数据末尾换行，纯空白帧无法经 data 传递，JSON 封装可完整保留换行结构
+function decodeChunk(raw) {
+    const text = String(raw)
+    const trimmed = text.trim()
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+            const parsed = JSON.parse(trimmed)
+            if (parsed && typeof parsed.d === 'string') return parsed.d
+        } catch (error) {
+            /* 非 JSON 帧，按原文处理 */
+        }
+    }
+    return text
+}
+
 /**
  * 使用 SSE 方式调用聊天接口
  *
@@ -46,8 +62,9 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
     // 处理接收到的消息
     eventSource.onmessage = function(event) {
         try {
-            const data = event.data
-            if (data && data.trim() !== '') {
+            const data = decodeChunk(event.data)
+            // 仅跳过解码后仍为空的帧（心跳）；含换行/空白的帧是正文换行结构，不可丢弃
+            if (data) {
                 receivedAny = true
                 onMessage(data)
             }
