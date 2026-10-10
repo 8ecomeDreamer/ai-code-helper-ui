@@ -156,10 +156,11 @@ export default {
     return {
       keyword: '',
       modules: [
-        { key: 'chat', label: '智能问答', icon: 'chat' },
-        { key: 'voice', label: '语音交互', icon: 'mic' },
-        { key: 'image', label: '图片识别', icon: 'image' },
-        { key: 'export', label: '文档导出', icon: 'export' }
+        { key: 'chat', label: '综合问答', icon: 'chat' },
+        { key: 'quote', label: '智能报价', icon: 'quote' },
+        { key: 'research', label: '竞品调研', icon: 'research' },
+        { key: 'compliance', label: '合规校验', icon: 'compliance' },
+        { key: 'fabric', label: '面料识别', icon: 'fabric' }
       ]
     }
   },
