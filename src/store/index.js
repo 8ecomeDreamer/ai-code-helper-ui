@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { chatWithSSE, recognizeImage } from '../api/chatApi.js'
+import { chatWithSSE, chatWithAttachments } from '../api/chatApi.js'
 import {
   loadAuth,
   saveAuth,
@@ -44,8 +44,8 @@ export const store = reactive({
   streaming: { active: false, content: '', received: false },
   streamingSessionId: null,
   currentEventSource: null,
-  // 综合问答待识别图片附件（输入区 chip，发送时内联识别）
-  pendingAttachment: null,
+  // 取消带附件流式请求的 abort 函数
+  abortAttachmentStream: null,
   toasts: [],
 
   /* ---------- 计算属性 ---------- */
@@ -164,9 +164,13 @@ export const store = reactive({
   },
 
   /* ---------- 问答流程 ---------- */
-  sendMessage(text) {
+  // 发送消息：attachments 可选 { images: [File], files: [File] }
+  // 图片/文件直接随聊天请求发给 Agent，不再上传 MinIO
+  async sendMessage(text, attachments) {
     const content = String(text || '').trim()
-    if (!content) return false
+    const images = (attachments && attachments.images) || []
+    const files = (attachments && attachments.files) || []
+    if (!content && !images.length && !files.length) return false
     this.finalizeIfStreaming()
 
     // 体验权限：每日提问配额校验
@@ -178,14 +182,23 @@ export const store = reactive({
       }
     }
 
+    // 为图片生成本地预览 URL（仅用于当前会话渲染）
+    const imagePreviewUrls = images.map(img => URL.createObjectURL(img))
+    const fileMeta = files.map(f => ({ name: f.name, size: f.size }))
+
     const session = this.ensureActiveSession()
     if (session.title === '新对话') {
-      session.title = content.slice(0, 24)
+      session.title = (content || (images.length ? '图片提问' : '文件提问')).slice(0, 24)
     }
     session.messages.push({
       id: uid(),
       role: 'user',
-      content,
+      content: content,
+      display: {
+        text: content,
+        images: imagePreviewUrls,
+        files: fileMeta
+      },
       timestamp: Date.now()
     })
     session.updatedAt = Date.now()
@@ -196,27 +209,50 @@ export const store = reactive({
       this.refreshQuota()
     }
 
-    this.startAiResponse(session, content)
+    // 根据是否有附件选择不同调用方式
+    if (images.length || files.length) {
+      this.startAiResponse(session, content, images, files)
+    } else {
+      this.startAiResponse(session, content)
+    }
     return true
   },
 
-  startAiResponse(session, message) {
+  startAiResponse(session, message, images, files) {
     this.streaming = { active: true, content: '', received: false }
     this.streamingSessionId = session.id
 
     // 关闭之前的连接
     if (this.currentEventSource) {
       this.currentEventSource.close()
+      this.currentEventSource = null
+    }
+    if (this.abortAttachmentStream) {
+      this.abortAttachmentStream()
+      this.abortAttachmentStream = null
     }
 
-    // 用箭头函数包一层，保证回调内部 this 指向 store
-    this.currentEventSource = chatWithSSE(
-      session.memoryId,
-      message,
-      data => this.handleAiMessage(data),
-      error => this.handleAiError(error),
-      () => this.handleAiClose()
-    )
+    if (images && images.length || files && files.length) {
+      // 带附件：POST multipart 直发 Agent
+      this.abortAttachmentStream = chatWithAttachments(
+        session.memoryId,
+        message,
+        images || [],
+        files || [],
+        data => this.handleAiMessage(data),
+        error => this.handleAiError(error),
+        () => this.handleAiClose()
+      )
+    } else {
+      // 纯文本：GET EventSource
+      this.currentEventSource = chatWithSSE(
+        session.memoryId,
+        message,
+        data => this.handleAiMessage(data),
+        error => this.handleAiError(error),
+        () => this.handleAiClose()
+      )
+    }
   },
 
   handleAiMessage(data) {
@@ -259,6 +295,10 @@ export const store = reactive({
       this.currentEventSource.close()
       this.currentEventSource = null
     }
+    if (this.abortAttachmentStream) {
+      this.abortAttachmentStream()
+      this.abortAttachmentStream = null
+    }
   },
 
   // 切换路由 / 会话时，将进行中的流式回复收尾归档
@@ -269,64 +309,6 @@ export const store = reactive({
   },
 
   /* ---------- 综合问答：语音 / 图片能力 ---------- */
-  // 挂接待识别图片（权限不足时返回 false）
-  attachImage(file) {
-    if (!this.canUse(PERMISSION.IMAGE)) {
-      this.notify('当前账号权限未开放图片识别功能', 'error')
-      return false
-    }
-    this.pendingAttachment = file
-    return true
-  },
-
-  removeAttachment() {
-    this.pendingAttachment = null
-  },
-
-  // 发送时内联识别待处理图片：识别结果成对消息写入当前会话
-  async recognizePendingAttachment() {
-    const file = this.pendingAttachment
-    if (!file) return false
-    this.pendingAttachment = null
-    this.finalizeIfStreaming()
-
-    const session = this.ensureActiveSession()
-    if (session.title === '新对话') {
-      session.title = `图片识别：${file.name}`.slice(0, 24)
-    }
-    session.messages.push({
-      id: uid(),
-      role: 'user',
-      content: `请识别这张图片的内容：${file.name}`,
-      timestamp: Date.now()
-    })
-    session.updatedAt = Date.now()
-    this.persist()
-
-    try {
-      const result = await recognizeImage(file)
-      session.messages.push({
-        id: uid(),
-        role: 'ai',
-        content: result || '识别完成，但后端未返回内容',
-        timestamp: Date.now()
-      })
-      this.notify('图片识别完成')
-    } catch (error) {
-      console.error('图片识别失败:', error)
-      session.messages.push({
-        id: uid(),
-        role: 'ai',
-        content:
-          '> ⚠️ 图片识别服务暂不可用：后端 `/api/ai/image/recognize` 接口未就绪，待后端对接后即可在对话内直接识别图片。',
-        timestamp: Date.now()
-      })
-      this.notify('识别服务连接失败，待后端对接', 'error')
-    }
-    session.updatedAt = Date.now()
-    this.persist()
-    return true
-  },
 
   exportCurrent() {
     if (!this.canUse(PERMISSION.EXPORT)) {

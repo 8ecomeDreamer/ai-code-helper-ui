@@ -13,7 +13,7 @@
         </p>
         <span class="demo-tag">
           <AppIcon name="bulb" :size="12" />
-          演示数据 · 真实全网抓取待后端对接（/api/research/fabric）
+          后端 Agent + 联网搜索 MCP · 实时全网比价
         </span>
       </div>
 
@@ -44,13 +44,17 @@
       <div v-if="searching" class="state-card">
         <LoadingDots />
         <p>正在检索各平台竞品行情...</p>
+        <p v-if="slowHint" class="slow-tip">
+          <AppIcon name="bulb" :size="13" />
+          联网调研耗时较长，请耐心等待（通常 30-90 秒）
+        </p>
       </div>
 
       <div v-else-if="notFound" class="state-card">
         <AppIcon name="x" :size="26" />
         <p>
           未找到「{{ lastKeyword }}」的竞品数据<br />
-          <small>演示数据暂覆盖：全棉府绸、涤棉纱卡、春亚纺、弹力牛仔布；后端对接后支持任意面料检索</small>
+          <small>后端联网调研暂未返回该面料的有数比价结果，请尝试更换更具体的关键词（如成分 / 组织 / 纱支）</small>
         </p>
       </div>
 
@@ -133,7 +137,9 @@ export default {
       hotKeywords: HOT_KEYWORDS,
       searching: false,
       notFound: false,
-      report: null
+      slowHint: false,
+      report: null,
+      _slowTimer: null
     }
   },
   methods: {
@@ -146,13 +152,14 @@ export default {
       if (!kw || this.searching) return
       this.searching = true
       this.notFound = false
+      this.slowHint = false
       this.report = null
       this.lastKeyword = kw
+      // 30s 后显示慢请求提示
+      this._slowTimer = setTimeout(() => { this.slowHint = true }, 30000)
       try {
-        // 演示检索也留出短暂延时，贴近真实调研体感
-        await new Promise(resolve => setTimeout(resolve, 500))
         const result = await searchCompetitors(kw)
-        if (result) {
+        if (result && Array.isArray(result.competitors) && result.competitors.length) {
           this.report = result
           store.notify('竞品调研完成')
         } else {
@@ -163,6 +170,8 @@ export default {
         store.notify('调研服务异常，请重试', 'error')
         this.notFound = true
       } finally {
+        clearTimeout(this._slowTimer)
+        this.slowHint = false
         this.searching = false
       }
     }
@@ -493,5 +502,14 @@ export default {
 .analysis-list li::marker {
   color: var(--c-primary);
   font-weight: 700;
+}
+
+.slow-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--c-accent);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <!-- 合规校验模块：上传/粘贴条款文本，前端规则引擎输出校验报告 -->
+  <!-- 合规校验模块：上传/粘贴条款文本，后端大模型深度审查输出校验报告 -->
   <div class="module-view scroll-thin">
     <div class="module-inner">
       <div class="module-hero">
@@ -9,11 +9,11 @@
         </div>
         <h1 class="module-title">合同条款合规一键校验</h1>
         <p class="module-sub">
-          上传或粘贴外贸合同条款，内置规则引擎自动检查成分标注、贸易术语、检验标准、支付、交期等 10 类必备条款与高风险表述
+          上传或粘贴外贸合同条款，后端大模型深度审查成分标注、贸易术语、检验标准、支付、交期等 10 类必备条款与高风险表述
         </p>
         <span class="demo-tag">
           <AppIcon name="bulb" :size="12" />
-          前端规则引擎独立完成 · 大模型深度审查待后端对接
+          大模型深度审查（txt/md/pdf）· Reflection Agent 逐层反思
         </span>
       </div>
 
@@ -30,7 +30,7 @@
           </div>
 
           <div class="form-body">
-            <!-- 文件上传（txt / md 直接读取文本） -->
+            <!-- 文件上传（txt / md 直接读取文本；pdf 由后端解析） -->
             <div
               :class="['dropzone', { dragover }]"
               @click="$refs.fileRef.click()"
@@ -39,11 +39,34 @@
               @drop.prevent="onDrop"
             >
               <AppIcon name="upload" :size="18" />
-              <span>点击上传或拖拽 .txt / .md 条款文件到此处</span>
-              <input ref="fileRef" type="file" accept=".txt,.md,text/plain,text/markdown" hidden @change="onFileChange" />
+              <span>{{ fileName ? '点击或拖拽可重新选择文件' : '点击上传或拖拽 .txt / .md / .pdf 条款文件到此处' }}</span>
+              <input ref="fileRef" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" hidden @change="onFileChange" />
             </div>
 
+            <!-- 已上传文件卡片 -->
+            <div v-if="uploadedFile" class="file-card">
+              <AppIcon name="file" :size="18" />
+              <div class="file-card-info">
+                <strong>{{ uploadedFile.name }}</strong>
+                <small>{{ formatFileSize(uploadedFile.size) }} · {{ fileExt }}</small>
+              </div>
+              <button class="file-card-remove" title="移除文件" @click="clearFile">
+                <AppIcon name="x" :size="14" />
+              </button>
+            </div>
+
+            <!-- 文本预览（只读，当文件已上传时展示文件内容） -->
             <textarea
+              v-if="uploadedFile && clauseText"
+              :value="clauseText"
+              class="clause-input scroll-thin readonly"
+              rows="12"
+              readonly
+            />
+
+            <!-- 文本输入（无文件时可编辑） -->
+            <textarea
+              v-else-if="!uploadedFile"
               v-model="clauseText"
               class="clause-input scroll-thin"
               rows="16"
@@ -51,9 +74,9 @@
             />
 
             <div class="action-row">
-              <span class="char-count">{{ clauseText.length }} 字</span>
-              <button class="ghost-btn" :disabled="!clauseText" @click="clauseText = ''">清空</button>
-              <button class="primary-btn" :disabled="checking || !clauseText.trim()" @click="runCheck">
+              <span class="char-count">{{ uploadedFile ? '文件模式' : clauseText.length + ' 字' }}</span>
+              <button v-if="!uploadedFile" class="ghost-btn" :disabled="!clauseText" @click="clauseText = ''">清空</button>
+              <button class="primary-btn" :disabled="checking || (!clauseText.trim() && !uploadedFile)" @click="runCheck">
                 <AppIcon name="compliance" :size="14" />
                 <span>{{ checking ? '校验中...' : '开始校验' }}</span>
               </button>
@@ -76,7 +99,7 @@
 
           <div v-if="checking" class="report-empty">
             <LoadingDots />
-            <p>规则引擎校验中...</p>
+            <p>大模型审查中...</p>
           </div>
 
           <div v-else-if="report" class="report-body">
@@ -143,9 +166,11 @@
 import AppIcon from '../components/AppIcon.vue'
 import LoadingDots from '../components/LoadingDots.vue'
 import { store } from '../store/index.js'
-import { checkCompliance, SAMPLE_CLAUSES } from '../utils/compliance.js'
+import { SAMPLE_CLAUSES } from '../utils/compliance.js'
+import { checkComplianceDoc } from '../api/bizApi.js'
 
-const MAX_FILE_SIZE = 1024 * 1024 // 1MB 纯文本足够
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB（兼容 pdf）
+const PDF_EXT = /\.pdf$/i
 
 export default {
   name: 'ComplianceView',
@@ -155,7 +180,9 @@ export default {
       clauseText: '',
       checking: false,
       dragover: false,
-      report: null
+      report: null,
+      uploadedFile: null,
+      fileName: ''
     }
   },
   computed: {
@@ -168,6 +195,12 @@ export default {
       if (!this.report) return ''
       const map = { pass: '校验通过', review: '建议复核', reject: '存在高风险' }
       return map[this.report.summary.verdict] || ''
+    },
+    fileExt() {
+      if (!this.uploadedFile) return ''
+      const name = this.uploadedFile.name || ''
+      const dot = name.lastIndexOf('.')
+      return dot > 0 ? name.slice(dot + 1).toUpperCase() : ''
     }
   },
   methods: {
@@ -176,9 +209,23 @@ export default {
       const map = { error: '高风险缺失', warn: '建议补充', info: '可选完善' }
       return map[item.level] || ''
     },
+    formatFileSize(size) {
+      if (!size) return ''
+      if (size < 1024) return `${size} B`
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`
+      return `${(size / 1024 / 1024).toFixed(1)} MB`
+    },
+    clearFile() {
+      this.uploadedFile = null
+      this.fileName = ''
+      this.clauseText = ''
+      this.report = null
+    },
     loadSample(type) {
       this.clauseText = SAMPLE_CLAUSES[type] || ''
       this.report = null
+      this.uploadedFile = null
+      this.fileName = ''
       store.notify(type === 'good' ? '已载入完备示范条款' : '已载入风险示范条款')
     },
     onFileChange(event) {
@@ -193,12 +240,23 @@ export default {
     },
     readFile(file) {
       if (file.size > MAX_FILE_SIZE) {
-        store.notify('文件超过 1MB，请拆分条款后重试')
+        store.notify('文件超过 5MB，请拆分条款后重试')
+        return
+      }
+      // pdf 无法在浏览器端直读文本，交由后端解析，仅保留文件引用
+      if (PDF_EXT.test(file.name)) {
+        this.uploadedFile = file
+        this.fileName = file.name
+        this.clauseText = ''
+        this.report = null
+        store.notify(`已选择 PDF：${file.name}，将由后端解析审查`)
         return
       }
       const reader = new FileReader()
       reader.onload = () => {
         this.clauseText = String(reader.result || '')
+        this.uploadedFile = file
+        this.fileName = file.name
         this.report = null
         store.notify(`已读取：${file.name}`)
       }
@@ -206,14 +264,25 @@ export default {
       reader.readAsText(file, 'utf-8')
     },
     async runCheck() {
-      if (!this.clauseText.trim() || this.checking) return
+      if ((!this.clauseText.trim() && !this.uploadedFile) || this.checking) return
       this.checking = true
       this.report = null
       try {
-        // 规则引擎为同步计算，留出短暂延时保证加载反馈
-        await new Promise(resolve => setTimeout(resolve, 400))
-        this.report = checkCompliance(this.clauseText)
-        store.notify('合规校验完成')
+        // 后端大模型深度审查（支持 txt/md/pdf）
+        const payload = {
+          file: this.uploadedFile || undefined,
+          text: this.clauseText.trim() || undefined
+        }
+        const data = await checkComplianceDoc(payload)
+        if (data && data.summary && Array.isArray(data.items)) {
+          this.report = data
+          store.notify('大模型合规审查完成')
+        } else {
+          store.notify('合规审查未返回有效结果，请重试', 'error')
+        }
+      } catch (error) {
+        console.error('合规审查失败:', error)
+        store.notify('合规审查服务异常：' + (error.message || '请稍后重试'), 'error')
       } finally {
         this.checking = false
       }
@@ -423,6 +492,64 @@ export default {
 .clause-input:focus {
   border-color: rgba(47, 84, 150, 0.45);
   box-shadow: 0 0 0 3px rgba(47, 84, 150, 0.1);
+}
+
+.clause-input.readonly {
+  background: #f9fafb;
+  color: var(--c-text-2);
+  cursor: default;
+  border-style: dashed;
+}
+
+/* 已上传文件卡片 */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--c-primary-softer);
+  border: 1px solid rgba(47, 84, 150, 0.18);
+}
+
+.file-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-card-info strong {
+  font-size: 12.5px;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-card-info small {
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
+.file-card-remove {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text-3);
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.file-card-remove:hover {
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.1);
 }
 
 .action-row {

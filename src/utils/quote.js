@@ -4,81 +4,13 @@ import { downloadFile, formatDateTime, sanitizeFilename } from './index.js'
  * 智能报价模块工具
  *
  * 数据链路：ERP 面料成本数据 -> 报价计算 -> 多语言报价邮件（Markdown）-> 导出 md / 打印 pdf
- * 说明：ERP_FABRICS 为前端内置演示数据，待后端 ERP 接口（如 /api/erp/fabric/list）
- * 就绪后替换 fetchErpFabrics 的实现即可，页面无需改动。
+ * 面料成本数据由后端 ERP 接口（/api/erp/fabric/list）提供，见 bizApi.fetchErpFabrics。
  */
 
-/* ---------------- ERP 演示数据（待后端对接） ---------------- */
+/* ---------------- 报价常量 ---------------- */
 
-// 演示用汇率（USD -> CNY）
+// 汇率（USD -> CNY），用于报价换算
 export const USD_CNY_RATE = 7.2
-
-export const ERP_FABRICS = [
-  {
-    code: 'ERP-CT-001',
-    name: '全棉平纹府绸',
-    nameEn: 'Cotton Poplin',
-    spec: 'C 100% · 40s×40s · 133×72',
-    weight: '120 g/m²',
-    width: '57/58"',
-    cost: { material: 6.8, process: 2.1, dyeing: 1.6, test: 0.4, packing: 0.3 },
-    moq: 1000,
-    leadTime: 15
-  },
-  {
-    code: 'ERP-TC-002',
-    name: '涤棉斜纹纱卡',
-    nameEn: 'T/C Twill',
-    spec: 'T65/C35 · 21s×21s · 108×58',
-    weight: '180 g/m²',
-    width: '58/59"',
-    cost: { material: 5.9, process: 2.4, dyeing: 1.8, test: 0.4, packing: 0.3 },
-    moq: 1500,
-    leadTime: 18
-  },
-  {
-    code: 'ERP-PL-003',
-    name: '涤纶春亚纺',
-    nameEn: 'Polyester Pongee',
-    spec: 'P 100% · 75D×150D · 平纹',
-    weight: '65 g/m²',
-    width: '57"',
-    cost: { material: 2.6, process: 1.2, dyeing: 1.0, test: 0.3, packing: 0.2 },
-    moq: 2000,
-    leadTime: 12
-  },
-  {
-    code: 'ERP-SP-004',
-    name: '弹力色织牛仔布',
-    nameEn: 'Stretch Denim',
-    spec: 'C98/SP2 · 10s+70D · 3/1 斜纹',
-    weight: '340 g/m²',
-    width: '52"',
-    cost: { material: 12.4, process: 4.2, dyeing: 3.6, test: 0.5, packing: 0.5 },
-    moq: 800,
-    leadTime: 25
-  },
-  {
-    code: 'ERP-OR-005',
-    name: 'CVC 牛津纺',
-    nameEn: 'CVC Oxford',
-    spec: 'C60/T40 · 40s×21s · 牛津组织',
-    weight: '140 g/m²',
-    width: '58"',
-    cost: { material: 5.2, process: 2.0, dyeing: 1.5, test: 0.4, packing: 0.3 },
-    moq: 1200,
-    leadTime: 16
-  }
-]
-
-/**
- * 获取 ERP 面料数据（当前返回内置演示数据；待后端对接后改为请求 ERP 接口）
- * @returns {Promise<Array>} 面料列表
- */
-export async function fetchErpFabrics() {
-  // TODO: 后端对接 - 替换为 axios.get('/api/erp/fabric/list')
-  return Promise.resolve(ERP_FABRICS)
-}
 
 /* ---------------- 报价计算 ---------------- */
 

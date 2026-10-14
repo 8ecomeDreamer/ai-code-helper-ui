@@ -1,5 +1,5 @@
 <template>
-  <!-- 面料识别模块：上传图片检测疵点（CV 模型待后端，前端提供上传与报告结构） -->
+  <!-- 面料识别模块：上传图片，后端 qwen-vl 视觉模型检测疵点并输出报告 -->
   <div class="module-view scroll-thin">
     <div class="module-inner">
       <div class="module-hero">
@@ -13,7 +13,7 @@
         </p>
         <span class="demo-tag">
           <AppIcon name="bulb" :size="12" />
-          疵点检测依赖 CV 模型 · 待后端对接（/api/fabric/defect/detect）
+          疵点检测由后端 qwen-vl 视觉模型完成 · 非面料图片将提示检测错误
         </span>
       </div>
 
@@ -85,7 +85,7 @@
           </div>
         </section>
 
-        <!-- 右侧：能力说明与演示报告 -->
+        <!-- 右侧：能力说明与输出结构 -->
         <section class="panel">
           <div class="panel-head">
             <AppIcon name="layers" :size="14" />
@@ -105,7 +105,7 @@
             <div class="sample-report">
               <div class="sample-head">
                 <AppIcon name="file" :size="13" />
-                <span>演示报告样例（后端模型就绪后按此结构输出）</span>
+                <span>输出结构示例（后端 qwen-vl 模型按此格式返回）</span>
               </div>
               <pre class="sample-code scroll-thin">{{ sampleReport }}</pre>
             </div>
@@ -113,11 +113,11 @@
             <div class="backend-note">
               <AppIcon name="flow" :size="14" />
               <div>
-                <strong>后端对接待办</strong>
+                <strong>检测流程</strong>
                 <p>
-                  1. 提供疵点检测接口 POST /api/fabric/defect/detect（multipart 图片）；<br />
-                  2. 返回 JSON：defects[{ name, position, grade }] + verdict；<br />
-                  3. 前端已按此契约预留 detect() 调用位，接口就绪后替换演示逻辑即可。
+                  1. 上传图片至 POST /api/fabric/defect/detect（multipart 图片）；<br />
+                  2. 视觉模型先判定是否为面料实物，非面料图片直接提示检测错误；<br />
+                  3. 确认面料后返回 defects[{ name, position, grade }] + verdict 疵点报告。
                 </p>
               </div>
             </div>
@@ -131,6 +131,7 @@
 <script>
 import AppIcon from '../components/AppIcon.vue'
 import { store } from '../store/index.js'
+import { detectFabricDefect } from '../api/bizApi.js'
 
 const MAX_SIZE = 10 * 1024 * 1024
 
@@ -205,22 +206,23 @@ export default {
       this.detecting = true
       this.result = null
       try {
-        // TODO: 后端对接 - axios.post('/api/fabric/defect/detect', formData)
-        // CV 疵点检测模型未就绪，先返回演示报告展示目标输出结构
-        await new Promise(resolve => setTimeout(resolve, 800))
-        this.result = {
-          status: 'demo',
-          title: '演示报告（检测模型待后端对接）',
-          message: '疵点检测依赖 CV 视觉模型，当前后端接口未就绪。以下为演示输出，接口对接后将返回真实检测结果。',
-          report: {
-            defects: [
-              { name: '断纬', position: '左中部 (x:120, y:340)', grade: 'B' },
-              { name: '油污', position: '右上区 (x:560, y:80)', grade: 'C' }
-            ],
-            verdict: 'B 级品 · 建议降级处理或修复后复检'
+        // 调用后端视觉模型检测（非面料图片会返回 status=error 提示）
+        const data = await detectFabricDefect(this.file)
+        if (data && data.status) {
+          this.result = data
+          if (data.status === 'done') {
+            store.notify('疵点检测完成')
+          } else {
+            store.notify(data.title || '检测结果错误', 'error')
           }
+        } else {
+          this.result = { status: 'error', title: '检测失败', message: '后端未返回有效检测结果，请更换清晰布面图片后重试。' }
+          store.notify('检测未返回有效结果', 'error')
         }
-        store.notify('已生成演示检测报告，真实检测待后端对接')
+      } catch (error) {
+        console.error('疵点检测失败:', error)
+        this.result = { status: 'error', title: '检测失败', message: '疵点检测服务异常：' + (error.message || '请稍后重试') }
+        store.notify('疵点检测失败，请重试', 'error')
       } finally {
         this.detecting = false
       }
@@ -482,6 +484,15 @@ export default {
 .detect-result.done {
   background: rgba(58, 125, 93, 0.05);
   border: 1px solid rgba(58, 125, 93, 0.25);
+}
+
+.detect-result.error {
+  background: rgba(192, 57, 43, 0.05);
+  border: 1px solid rgba(192, 57, 43, 0.28);
+}
+
+.detect-result.error .result-head {
+  color: #c0392b;
 }
 
 .result-head {

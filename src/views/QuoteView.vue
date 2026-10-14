@@ -11,10 +11,6 @@
         <p class="module-sub">
           调用 ERP 面料成本数据，自动完成利润加成与数量折扣计算，生成中 / 英 / 双语报价邮件，支持 Markdown 与 PDF 导出
         </p>
-        <span class="demo-tag">
-          <AppIcon name="bulb" :size="12" />
-          ERP 演示数据 · 待后端对接真实成本接口
-        </span>
       </div>
 
       <div class="quote-grid">
@@ -33,7 +29,8 @@
 
             <label class="field">
               <span class="field-label">面料（ERP 数据）</span>
-              <select v-model="form.fabricCode">
+              <span v-if="fabricsLoading" class="field-loading">加载面料数据中...</span>
+              <select v-else v-model="form.fabricCode">
                 <option v-for="item in fabrics" :key="item.code" :value="item.code">
                   {{ item.name }} · {{ item.code }}
                 </option>
@@ -96,9 +93,9 @@
               </div>
             </label>
 
-            <button class="primary-btn" type="button" @click="generate">
+            <button class="primary-btn" type="button" :disabled="generating" @click="generate">
               <AppIcon name="sparkle" :size="15" />
-              <span>生成报价邮件</span>
+              <span>{{ generating ? 'AI 生成中...' : '生成报价邮件' }}</span>
             </button>
           </div>
         </section>
@@ -120,7 +117,12 @@
             </span>
           </div>
 
-          <div v-if="quote" class="result-body">
+          <div v-if="quote" class="result-body" :class="{ 'loading-overlay': generating }">
+            <!-- 生成中覆盖层 -->
+            <div v-if="generating" class="generating-mask">
+              <LoadingDots />
+              <p>AI 正在生成报价邮件...</p>
+            </div>
             <!-- 报价摘要 -->
             <div class="quote-summary">
               <div class="sum-item">
@@ -161,10 +163,10 @@
 
 <script>
 import AppIcon from '../components/AppIcon.vue'
+import LoadingDots from '../components/LoadingDots.vue'
 import { renderMarkdown } from '../utils/markdown.js'
 import { store } from '../store/index.js'
 import {
-  fetchErpFabrics,
   computeQuote,
   buildQuoteEmail,
   formatMoney,
@@ -174,13 +176,15 @@ import {
   TRADE_TERMS,
   EMAIL_LANGUAGES
 } from '../utils/quote.js'
+import { generateQuoteEmail, fetchErpFabrics } from '../api/bizApi.js'
 
 export default {
   name: 'QuoteView',
-  components: { AppIcon },
+  components: { AppIcon, LoadingDots },
   data() {
     return {
       fabrics: [],
+      fabricsLoading: false,
       currencies: CURRENCIES,
       tradeTerms: TRADE_TERMS,
       languages: EMAIL_LANGUAGES,
@@ -194,7 +198,8 @@ export default {
         lang: 'both'
       },
       quote: null,
-      emailMarkdown: ''
+      emailMarkdown: '',
+      generating: false
     }
   },
   computed: {
@@ -208,9 +213,19 @@ export default {
   methods: {
     formatMoney,
     async loadFabrics() {
-      this.fabrics = await fetchErpFabrics()
-      if (this.fabrics.length && !this.form.fabricCode) {
-        this.form.fabricCode = this.fabrics[0].code
+      this.fabricsLoading = true
+      try {
+        const list = await fetchErpFabrics()
+        this.fabrics = Array.isArray(list) ? list : []
+        if (this.fabrics.length && !this.form.fabricCode) {
+          this.form.fabricCode = this.fabrics[0].code
+        }
+      } catch (error) {
+        console.error('ERP 面料数据加载失败:', error)
+        this.fabrics = []
+        store.notify('ERP 面料数据接口调用失败：' + (error.message || '请稍后重试'), 'error')
+      } finally {
+        this.fabricsLoading = false
       }
     },
     generate() {
@@ -230,8 +245,28 @@ export default {
         currency: this.form.currency,
         tradeTerm: this.form.tradeTerm
       })
-      this.emailMarkdown = buildQuoteEmail(this.quote, this.form.lang, this.form.customer)
-      store.notify('报价邮件已生成')
+      this.buildEmailByAgent()
+    },
+    // 先由后端 Agent 生成报价邮件（思考后的回复建议），失败时降级为本地模板
+    async buildEmailByAgent() {
+      if (this.generating) return
+      this.generating = true
+      const fallback = buildQuoteEmail(this.quote, this.form.lang, this.form.customer)
+      this.emailMarkdown = fallback
+      try {
+        const email = await generateQuoteEmail(this.quote, this.form.lang, this.form.customer)
+        if (email && String(email).trim()) {
+          this.emailMarkdown = String(email)
+          store.notify('报价邮件已由 AI 生成')
+        } else {
+          store.notify('AI 未返回有效邮件，已使用本地模板', 'info')
+        }
+      } catch (error) {
+        console.warn('报价邮件接口不可用，降级为本地模板:', error)
+        store.notify('AI 生成失败，已使用本地模板', 'info')
+      } finally {
+        this.generating = false
+      }
     },
     exportMd() {
       try {
@@ -305,20 +340,6 @@ export default {
   color: var(--c-text-2);
   text-align: center;
   line-height: 1.7;
-}
-
-.demo-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--c-accent);
-  background: rgba(194, 106, 74, 0.08);
-  border: 1px dashed rgba(194, 106, 74, 0.4);
 }
 
 /* 布局 */
@@ -583,5 +604,37 @@ export default {
   .quote-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* 加载态 */
+.field-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+  background: var(--c-primary-softer);
+  font-size: 12.5px;
+  color: var(--c-text-3);
+}
+
+.result-body {
+  position: relative;
+}
+
+.generating-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  color: var(--c-text-2);
+  font-size: 13px;
 }
 </style>
