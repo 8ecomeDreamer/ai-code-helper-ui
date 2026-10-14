@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { TOKEN_KEY } from './authApi.js'
 
 // 统一使用相对路径 /api：
-// - 开发环境由 Vite server.proxy 转发到 http://localhost:8081（见 vite.config.js）
+// - 开发环境由 Vite server.proxy 转发到 http://localhost:8881（见 vite.config.js）
 // - 生产环境由 Nginx 同域转发到后端服务
 const API_BASE_URL = '/api'
 
@@ -96,22 +97,106 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
 }
 
 /**
- * 调用图片内容识别接口
- * @param {File} file 图片文件
- * @returns {Promise<string>} 识别结果文本（Markdown）
+ * 带附件的聊天：POST multipart /ai/chat（携带图片/文件），服务端返回 SSE 流。
+ * 回调契约与 chatWithSSE 一致：onMessage / onError / onClose。
+ * @returns {Function} close() 用于中断请求
  */
-export async function recognizeImage(file) {
+export function chatWithAttachments(memoryId, message, images, files, onMessage, onError, onClose) {
+    const controller = new AbortController()
+    const token = localStorage.getItem(TOKEN_KEY)
+
+    const formData = new FormData()
+    formData.append('memoryId', String(memoryId))
+    formData.append('message', message || '')
+    if (images && images.length) {
+        for (const img of images) formData.append('images', img, img.name || 'image.png')
+    }
+    if (files && files.length) {
+        for (const f of files) formData.append('files', f, f.name || 'file')
+    }
+
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    let finished = false
+    const finish = (cb, arg) => {
+        if (finished) return
+        finished = true
+        cb && cb(arg)
+    }
+
+    fetch(`${API_BASE_URL}/ai/chat`, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal
+    }).then(response => {
+        if (!response.ok) {
+            finish(onError, new Error(`HTTP ${response.status}`))
+            finish(onClose)
+            return
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        function pump() {
+            reader.read().then(({ done, value }) => {
+                if (done) { finish(onClose); return }
+                buffer += decoder.decode(value, { stream: true })
+                // 解析 SSE 帧（以双换行分隔）
+                const frames = buffer.split('\n\n')
+                buffer = frames.pop()
+                for (const frame of frames) {
+                    // 兼容 "data:xxx" 和裸文本帧
+                    const line = frame.startsWith('data:') ? frame.slice(5).trim() : frame.trim()
+                    if (line) {
+                        const decoded = decodeChunk(line)
+                        if (decoded) onMessage(decoded)
+                    }
+                }
+                pump()
+            }).catch(err => {
+                if (err.name === 'AbortError') return
+                finish(onError, err)
+                finish(onClose)
+            })
+        }
+        pump()
+    }).catch(err => {
+        if (err.name === 'AbortError') return
+        finish(onError, err)
+        finish(onClose)
+    })
+
+    return () => controller.abort()
+}
+
+/**
+ * 通用文件上传（后端 /api/file/upload，MinIO 对象存储）
+ * 保留供其他模块使用（面料识别等），聊天附件已改走 chatWithAttachments 直发 Agent。
+ */
+export async function uploadFile(file, prefix = 'common') {
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('prefix', prefix)
 
-    const response = await axios.post(`${API_BASE_URL}/ai/image/recognize`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+    // /file/** 需登录态，统一携带 JWT（Bearer）
+    const token = localStorage.getItem(TOKEN_KEY)
+    const headers = { 'Content-Type': 'multipart/form-data' }
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    const response = await axios.post(`${API_BASE_URL}/file/upload`, formData, {
+        headers,
         timeout: 60000
     })
 
     const data = response.data
-    if (typeof data === 'string') return data
-    return data.data || data.message || JSON.stringify(data)
+    // 后端统一响应体 { code, msg, data }
+    if (data && data.code !== undefined && data.code !== 200 && data.code !== 0) {
+        throw new Error(data.msg || data.message || '上传失败')
+    }
+    return data.data || data
 }
 
 /**
