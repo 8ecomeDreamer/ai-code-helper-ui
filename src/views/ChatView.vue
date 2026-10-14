@@ -17,21 +17,12 @@
         </p>
 
         <div class="hero-input">
-          <div v-if="attachment" class="attach-chip">
-            <AppIcon name="image" :size="14" />
-            <span class="attach-name">{{ attachment.name }}</span>
-            <small>发送后自动识别</small>
-            <button class="attach-remove" title="移除图片" @click="store.removeAttachment()">
-              <AppIcon name="x" :size="12" />
-            </button>
-          </div>
           <ChatInput
             :disabled="disabled"
             :mic-enabled="micEnabled"
             :image-enabled="imageEnabled"
             show-hint
             @send-message="handleSend"
-            @attach-image="attachImage"
             @notify="(msg, type) => store.notify(msg, type)"
           />
         </div>
@@ -84,6 +75,7 @@
           v-for="message in messages"
           :key="message.id"
           :message="message.content"
+          :attachments="message.display"
           :is-user="message.role === 'user'"
           :timestamp="message.timestamp"
           @notify="(msg, type) => store.notify(msg, type)"
@@ -109,22 +101,13 @@
       </div>
 
       <div class="chat-input-area">
-        <div v-if="attachment" class="attach-chip">
-          <AppIcon name="image" :size="14" />
-          <span class="attach-name">{{ attachment.name }}</span>
-          <small>发送后自动识别</small>
-          <button class="attach-remove" title="移除图片" @click="store.removeAttachment()">
-            <AppIcon name="x" :size="12" />
-          </button>
-        </div>
         <ChatInput
           ref="chatInputRef"
           :disabled="disabled"
           :mic-enabled="micEnabled"
           :image-enabled="imageEnabled"
-          placeholder="继续提问纺织相关问题，或上传面料图片识别..."
+          placeholder="继续提问纺织相关问题，或粘贴图片/上传文件..."
           @send-message="handleSend"
-          @attach-image="attachImage"
           @notify="(msg, type) => store.notify(msg, type)"
         />
       </div>
@@ -207,10 +190,6 @@ export default {
     },
     streamingMarkdown() {
       return renderMarkdown(this.streaming.content || '')
-    },
-    // 待识别图片附件
-    attachment() {
-      return store.pendingAttachment
     }
   },
   watch: {
@@ -226,18 +205,12 @@ export default {
     }
   },
   methods: {
-    // 发送：先内联识别待处理图片，再发送文本提问
-    async handleSend(text) {
-      if (store.pendingAttachment) {
-        await store.recognizePendingAttachment()
-      }
-      if (text) {
-        store.sendMessage(text)
-      }
-    },
-    // 挂载图片后不再跳转，输入区显示 chip，发送时内联识别
-    attachImage(file) {
-      store.attachImage(file)
+    // 发送：附件上传与提问拼装均由 store.sendMessage 处理
+    async handleSend(payload) {
+      const text = payload && payload.text
+      const images = (payload && payload.images) || []
+      const files = (payload && payload.files) || []
+      await store.sendMessage(text, { images, files })
     },
     scrollToBottom() {
       this.$nextTick(() => {
@@ -319,58 +292,6 @@ export default {
   width: 100%;
   max-width: 720px;
   margin-top: 34px;
-}
-
-/* 待识别图片 chip */
-.attach-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  margin: 0 auto 8px;
-  padding: 7px 12px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  color: var(--c-primary-strong);
-  background: var(--c-primary-softer);
-  border: 1px solid rgba(47, 84, 150, 0.2);
-}
-
-.hero-input .attach-chip,
-.chat-input-area .attach-chip {
-  display: flex;
-  width: fit-content;
-}
-
-.attach-chip .attach-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-}
-
-.attach-chip small {
-  color: var(--c-text-3);
-  flex-shrink: 0;
-}
-
-.attach-remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  color: var(--c-text-3);
-  background: rgba(0, 0, 0, 0.05);
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.attach-remove:hover {
-  color: #c0392b;
-  background: rgba(192, 57, 43, 0.1);
 }
 
 /* 建议卡片 */
@@ -621,7 +542,7 @@ export default {
 }
 
 .chat-input-area > * {
-  max-width: 860px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
