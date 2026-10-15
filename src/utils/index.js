@@ -31,6 +31,18 @@ export function formatTime(date) {
 }
 
 /**
+ * 解析后端时间为毫秒时间戳（兼容毫秒时间戳与 yyyy-MM-dd HH:mm:ss 字符串）
+ * @param {number|string} value 后端时间字段
+ * @returns {number} 毫秒时间戳，解析失败回退当前时间
+ */
+export function parseTime(value) {
+    if (value == null || value === '') return Date.now()
+    if (typeof value === 'number') return value
+    const parsed = Date.parse(String(value).replace(' ', 'T'))
+    return Number.isNaN(parsed) ? Date.now() : parsed
+}
+
+/**
  * 格式化日期时间（导出文档用）
  * @param {number} timestamp 时间戳
  * @returns {string} yyyy-MM-dd HH:mm
@@ -59,9 +71,7 @@ export function debounce(func, wait) {
     }
 }
 
-/* ---------------- 本地历史会话存储 ---------------- */
-
-const SESSIONS_STORAGE_KEY = 'textile-agent-sessions'
+/* ---------------- 会话工具 ---------------- */
 
 /**
  * 生成唯一ID
@@ -72,7 +82,7 @@ export function uid() {
 }
 
 /**
- * 创建一个新的会话对象
+ * 创建一个新的会话对象（仅内存态；发送后由后端落库，id=memoryId）
  * @returns {Object} 会话对象
  */
 export function createSession() {
@@ -82,35 +92,8 @@ export function createSession() {
         title: '新对话',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        messages: []
-    }
-}
-
-/**
- * 从 localStorage 读取历史会话
- * @returns {Array} 会话列表
- */
-export function loadSessions() {
-    try {
-        const raw = localStorage.getItem(SESSIONS_STORAGE_KEY)
-        if (!raw) return []
-        const list = JSON.parse(raw)
-        return Array.isArray(list) ? list : []
-    } catch (error) {
-        console.error('读取本地历史会话失败:', error)
-        return []
-    }
-}
-
-/**
- * 将历史会话持久化到 localStorage
- * @param {Array} sessions 会话列表
- */
-export function saveSessions(sessions) {
-    try {
-        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions))
-    } catch (error) {
-        console.error('保存本地历史会话失败:', error)
+        messages: [],
+        historyLoaded: true
     }
 }
 

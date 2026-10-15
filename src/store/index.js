@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { chatWithSSE, chatWithAttachments } from '../api/chatApi.js'
+import { chatWithSSE, chatWithAttachments, fetchMySessions, fetchSessionHistory, deleteChatSession } from '../api/chatApi.js'
 import {
   loadAuth,
   saveAuth,
@@ -11,9 +11,8 @@ import {
 import {
   uid,
   createSession,
-  loadSessions,
-  saveSessions,
-  exportSessionAs
+  exportSessionAs,
+  parseTime
 } from '../utils/index.js'
 import {
   hasPermission,
@@ -55,7 +54,7 @@ export const store = reactive({
 
   /* ---------- 初始化 ---------- */
   init() {
-    this.sessions = loadSessions()
+    // 会话列表不再存本地，统一登录后由 syncRemoteSessions 从云端拉取
 
     // 恢复本地登录态，并后台校验有效性
     const auth = loadAuth()
@@ -69,6 +68,7 @@ export const store = reactive({
           saveAuth(this.token, user)
           this.refreshQuota()
           this.fetchMenus()
+          this.syncRemoteSessions()
         })
         .catch(error => {
           console.warn('[auth] 本地登录态已失效:', error.message)
@@ -96,6 +96,7 @@ export const store = reactive({
     saveAuth(token, user)
     this.refreshQuota()
     this.fetchMenus()
+    this.syncRemoteSessions()
     this.notify(`欢迎，${user.nickname || user.username}`)
   },
 
@@ -115,6 +116,7 @@ export const store = reactive({
     this.user = null
     this.menus = []
     this.quotaRemaining = null
+    this.sessions = []
     this.activeSessionId = null
     this.notify('已退出登录')
   },
@@ -137,15 +139,20 @@ export const store = reactive({
   selectSession(id) {
     this.finalizeIfStreaming()
     this.activeSessionId = id
+    this.loadSessionHistory(id)
   },
 
   deleteSession(id) {
     this.finalizeIfStreaming()
+    const target = this.sessions.find(session => session.id === id)
     this.sessions = this.sessions.filter(session => session.id !== id)
     if (this.activeSessionId === id) {
       this.activeSessionId = null
     }
-    this.persist()
+    // 同步删除云端会话行（未登录/无 dbId 时静默跳过）
+    if (target && target.dbId) {
+      deleteChatSession(target.dbId).catch(() => {})
+    }
     this.notify('对话已删除')
   },
 
@@ -159,8 +166,69 @@ export const store = reactive({
     return session
   },
 
-  persist() {
-    saveSessions(this.sessions)
+  /* ---------- 云端聊天历史同步 ---------- */
+  // 拉取后端会话列表合并进本地：按 dbId/memoryId 匹配补挂 dbId，
+  // 本地没有的云端会话补进侧边栏（消息懒加载）
+  async syncRemoteSessions() {
+    if (!this.token) return
+    let list
+    try {
+      list = await fetchMySessions()
+    } catch (error) {
+      console.warn('[chat] 拉取云端会话失败:', error.message)
+      return
+    }
+    if (!Array.isArray(list)) return
+    for (const item of list) {
+      const dbId = item.id
+      const existing = this.sessions.find(s => s.dbId === dbId || s.memoryId === dbId)
+      if (existing) {
+        existing.dbId = dbId
+        existing.memoryId = dbId
+        if (existing.title === '新对话' && item.session_title) {
+          existing.title = item.session_title
+        }
+        continue
+      }
+      this.sessions.push({
+        id: uid(),
+        dbId,
+        memoryId: dbId,
+        title: item.session_title || '新对话',
+        createdAt: parseTime(item.create_time),
+        updatedAt: parseTime(item.update_time || item.create_time),
+        messages: [],
+        historyLoaded: false
+      })
+    }
+  },
+
+  // 选中历史会话时懒加载消息明细（含图片/文档附件预览链接）
+  async loadSessionHistory(id) {
+    const session = this.sessions.find(s => s.id === id)
+    if (!session || !session.dbId || session.historyLoaded || session.messages.length) return
+    let list
+    try {
+      list = await fetchSessionHistory(session.dbId)
+    } catch (error) {
+      console.warn('[chat] 拉取历史消息失败:', error.message)
+      return
+    }
+    // 等待期间已产生新消息或已加载过：丢弃本次结果，避免覆盖
+    if (session.messages.length || session.historyLoaded) return
+    session.messages = (Array.isArray(list) ? list : []).map(m => ({
+      id: String(m.id),
+      role: m.role === 'assistant' ? 'ai' : m.role,
+      content: m.content || '',
+      display: m.role === 'user' ? {
+        text: m.content || '',
+        images: (m.attachments || []).filter(a => a.type === 'image' && a.url).map(a => a.url),
+        files: (m.attachments || []).filter(a => a.type === 'file')
+          .map(a => ({ name: a.fileName, size: a.fileSize }))
+      } : undefined,
+      timestamp: parseTime(m.createTime)
+    }))
+    session.historyLoaded = true
   },
 
   /* ---------- 问答流程 ---------- */
@@ -202,7 +270,6 @@ export const store = reactive({
       timestamp: Date.now()
     })
     session.updatedAt = Date.now()
-    this.persist()
 
     if (isTrial(this.user)) {
       consumeQuota()
@@ -282,7 +349,8 @@ export const store = reactive({
         timestamp: Date.now()
       })
       session.updatedAt = Date.now()
-      this.persist()
+      // 本轮后端已落库（会话行 id=memoryId），同步补挂 dbId 供历史/删除使用
+      this.syncRemoteSessions()
     } else if (!suppressEmptyTip && !this.streaming.received && this.streamingSessionId) {
       // 连接结束但未收到任何内容：后端未启动或接口异常
       this.notify('未获取到 AI 回复，请检查后端服务是否启动', 'error')

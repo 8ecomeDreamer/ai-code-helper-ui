@@ -214,3 +214,39 @@ export async function checkServiceHealth() {
         return false
     }
 }
+
+/* ---------------- 聊天历史（后端 /chat-session、/chat-message，需登录态） ---------------- */
+// 这两个控制器直接返回裸 JSON（数组/实体），非 Result 包装
+async function authJson(path, options = {}) {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const headers = { ...(options.headers || {}) }
+    if (token) headers.Authorization = `Bearer ${token}`
+    const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return response.json()
+}
+
+/**
+ * 拉取当前登录用户的会话列表（侧边栏历史）
+ * @returns {Promise<Array>} ai_chat_session 列表（id 倒序）
+ */
+export function fetchMySessions() {
+    return authJson('/chat-session/my')
+}
+
+/**
+ * 拉取会话历史消息（含附件与 MinIO 临时预览链接）
+ * @param {number} sessionId 会话id（memoryId）
+ * @returns {Promise<Array>} ChatMessageVo 列表（时间正序）
+ */
+export function fetchSessionHistory(sessionId) {
+    return authJson(`/chat-message/history/${sessionId}`)
+}
+
+/**
+ * 删除云端会话（本地删除时同步清理数据库行）
+ * @param {number} sessionId 会话id
+ */
+export function deleteChatSession(sessionId) {
+    return authJson(`/chat-session/${sessionId}`, { method: 'DELETE' })
+}
