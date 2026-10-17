@@ -91,6 +91,26 @@ export const promptApi = buildResource({ base: '/prompt-template', listPath: '' 
 export const chatSessionApi = buildResource({ base: '/chat-session', listPath: '' })
 
 /**
+ * Dashboard 聚合统计：GET /agent/stats（需登录态）。
+ * 后端 Result 直接在顶层铺平 overview/apiCalls/modelCalls/recent（无 data 包裹），
+ * 因此这里取整个响应体并校验 code。
+ * @returns {Promise<{overview,apiCalls,modelCalls,recent}>}
+ */
+export async function fetchDashboardStats() {
+  const response = await axios.get(`${API_BASE_URL}/agent/stats`, {
+    headers: authHeaders(),
+    timeout: 15000
+  })
+  const payload = response.data
+  if (isEnvelope(payload) && payload.code !== CODE_SUCCESS) {
+    const error = new Error(payload.msg || '统计加载失败')
+    error.business = true
+    throw error
+  }
+  return payload
+}
+
+/**
  * 通用文件上传（MinIO）
  * @param {File} file   文件对象
  * @param {string} prefix 目录前缀，如 knowledge/pdf
@@ -105,4 +125,41 @@ export async function uploadFile(file, prefix) {
     timeout: 60000
   })
   return unwrapData(response)
+}
+
+/**
+ * 知识库文档管理（/knowledge）：文档落 MinIO + 向量化 + 启停。
+ * 后端统一 Result 信封 { code, msg, data }。
+ */
+export const knowledgeApi = {
+  /** 文档列表 */
+  list: async () =>
+    unwrapData(await axios.get(`${API_BASE_URL}/knowledge/list`, { headers: authHeaders(), timeout: 15000 })),
+  /** 上传文档（md/txt/pdf） */
+  upload: async (file, kbType) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (kbType) form.append('kbType', kbType)
+    const response = await axios.post(`${API_BASE_URL}/knowledge/upload`, form, {
+      headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+      timeout: 120000
+    })
+    return unwrapData(response)
+  },
+  /** 启用/停用（停用即从检索向量库移除） */
+  setEnabled: async (id, enabled) =>
+    unwrapOk(await axios.put(`${API_BASE_URL}/knowledge/${id}/enabled`, null, {
+      params: { enabled },
+      headers: authHeaders(),
+      timeout: 60000
+    })),
+  /** 重索引：强制重走向量化 */
+  reindex: async id =>
+    unwrapOk(await axios.post(`${API_BASE_URL}/knowledge/${id}/reindex`, null, {
+      headers: authHeaders(),
+      timeout: 120000
+    })),
+  /** 删除（移除向量 + MinIO 对象 + 逻辑删除） */
+  remove: async id =>
+    unwrapOk(await axios.delete(`${API_BASE_URL}/knowledge/${id}`, { headers: authHeaders(), timeout: 30000 }))
 }
