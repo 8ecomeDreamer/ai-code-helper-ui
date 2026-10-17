@@ -18,109 +18,133 @@
       </div>
 
       <div class="fabric-grid">
-        <!-- 左侧：上传区 -->
-        <section class="panel">
-          <div class="panel-head">
-            <AppIcon name="image" :size="14" />
-            <strong>面料图片</strong>
-            <span v-if="previewUrl" class="head-actions">
-              <button class="ghost-btn" @click="removeFile">
-                <AppIcon name="trash" :size="13" />
-                <span>移除</span>
-              </button>
-            </span>
-          </div>
-
-          <div class="form-body">
-            <div
-              v-if="!previewUrl"
-              :class="['dropzone', { dragover }]"
-              @click="$refs.fileRef.click()"
-              @dragover.prevent="dragover = true"
-              @dragleave.prevent="dragover = false"
-              @drop.prevent="onDrop"
-            >
-              <span class="drop-icon">
-                <AppIcon name="upload" :size="22" />
+        <!-- 左列：上传 + 能力说明 -->
+        <div class="fabric-col-left">
+          <section class="panel">
+            <div class="panel-head">
+              <AppIcon name="image" :size="14" />
+              <strong>面料图片</strong>
+              <span v-if="previewUrl" class="head-actions">
+                <button class="ghost-btn" @click="removeFile">
+                  <AppIcon name="trash" :size="13" />
+                  <span>移除</span>
+                </button>
               </span>
-              <strong>点击上传或拖拽面料图片到此处</strong>
-              <small>支持 JPG / PNG，建议拍摄平整布面，单张不超过 10MB</small>
-              <input ref="fileRef" type="file" accept="image/*" hidden @change="onFileChange" />
             </div>
 
-            <div v-else class="preview-wrap">
-              <img :src="previewUrl" class="preview-img" alt="面料预览" />
-              <div class="preview-meta">
-                <span>{{ file ? file.name : '' }}</span>
-                <small>{{ file ? (file.size / 1024).toFixed(0) + ' KB' : '' }}</small>
-              </div>
-            </div>
-
-            <button class="primary-btn" :disabled="!file || detecting" @click="detect">
-              <AppIcon name="fabric" :size="15" />
-              <span>{{ detecting ? '检测中...' : '开始疵点检测' }}</span>
-            </button>
-
-            <!-- 检测结果 -->
-            <div v-if="result" :class="['detect-result', result.status]">
-              <div class="result-head">
-                <AppIcon :name="result.status === 'done' ? 'check' : 'bulb'" :size="14" />
-                <strong>{{ result.title }}</strong>
-              </div>
-              <p>{{ result.message }}</p>
-              <template v-if="result.report">
-                <div class="defect-list">
-                  <div v-for="defect in result.report.defects" :key="defect.name" class="defect-item">
-                    <span :class="['defect-dot', defect.grade]"></span>
-                    <strong>{{ defect.name }}</strong>
-                    <em>{{ defect.position }}</em>
-                    <small :class="defect.grade">{{ gradeLabel(defect.grade) }}</small>
-                  </div>
-                </div>
-                <div class="result-foot">
-                  综合评定：<strong>{{ result.report.verdict }}</strong>
-                </div>
-              </template>
-            </div>
-          </div>
-        </section>
-
-        <!-- 右侧：能力说明与输出结构 -->
-        <section class="panel">
-          <div class="panel-head">
-            <AppIcon name="layers" :size="14" />
-            <strong>检测能力说明</strong>
-          </div>
-          <div class="ability-body">
-            <div class="ability-grid">
-              <div v-for="ability in abilities" :key="ability.name" class="ability-card">
-                <span class="ability-icon" :style="{ color: ability.color, background: ability.bg }">
-                  <AppIcon :name="ability.icon" :size="15" />
+            <div class="form-body">
+              <div
+                v-if="!previewUrl"
+                :class="['dropzone', { dragover }]"
+                @click="$refs.fileRef.click()"
+                @dragover.prevent="dragover = true"
+                @dragleave.prevent="dragover = false"
+                @drop.prevent="onDrop"
+              >
+                <span class="drop-icon">
+                  <AppIcon name="upload" :size="22" />
                 </span>
-                <strong>{{ ability.name }}</strong>
-                <small>{{ ability.desc }}</small>
+                <strong>点击上传或拖拽面料图片到此处</strong>
+                <small>支持 JPG / PNG，建议拍摄平整布面，单张不超过 10MB</small>
+                <input ref="fileRef" type="file" accept="image/*" hidden @change="onFileChange" />
               </div>
-            </div>
 
-            <div class="sample-report">
-              <div class="sample-head">
-                <AppIcon name="file" :size="13" />
-                <span>输出结构示例（后端 qwen-vl 模型按此格式返回）</span>
+              <div v-else class="preview-wrap">
+                <img :src="previewUrl" class="preview-img" alt="面料预览" />
+                <div class="preview-meta">
+                  <span>{{ file ? file.name : '' }}</span>
+                  <small>{{ file ? (file.size / 1024).toFixed(0) + ' KB' : '' }}</small>
+                </div>
               </div>
-              <pre class="sample-code scroll-thin">{{ sampleReport }}</pre>
-            </div>
 
-            <div class="backend-note">
-              <AppIcon name="flow" :size="14" />
-              <div>
-                <strong>检测流程</strong>
-                <p>
-                  1. 上传图片至 POST /api/fabric/defect/detect（multipart 图片）；<br />
-                  2. 视觉模型先判定是否为面料实物，非面料图片直接提示检测错误；<br />
-                  3. 确认面料后返回 defects[{ name, position, grade }] + verdict 疵点报告。
-                </p>
+              <button class="primary-btn" :disabled="!file || detecting" @click="detect">
+                <AppIcon name="fabric" :size="15" />
+                <span>{{ detecting ? '检测中...' : '开始疵点检测' }}</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <AppIcon name="layers" :size="14" />
+              <strong>检测能力说明</strong>
+            </div>
+            <div class="ability-body">
+              <div class="ability-grid">
+                <div v-for="ability in abilities" :key="ability.name" class="ability-card">
+                  <span class="ability-icon" :style="{ color: ability.color, background: ability.bg }">
+                    <AppIcon :name="ability.icon" :size="15" />
+                  </span>
+                  <strong>{{ ability.name }}</strong>
+                  <small>{{ ability.desc }}</small>
+                </div>
+              </div>
+
+              <div class="sample-report">
+                <div class="sample-head">
+                  <AppIcon name="file" :size="13" />
+                  <span>输出结构示例（后端 qwen-vl 模型按此格式返回）</span>
+                </div>
+                <pre class="sample-code scroll-thin">{{ sampleReport }}</pre>
+              </div>
+
+              <div class="backend-note">
+                <AppIcon name="flow" :size="14" />
+                <div>
+                  <strong>检测流程</strong>
+                  <p>
+                    1. 上传图片至 POST /api/fabric/defect/detect（multipart 图片）；<br />
+                    2. 视觉模型先判定是否为面料实物，非面料图片直接提示检测错误；<br />
+                    3. 确认面料后返回 defects[{ name, position, grade }] + verdict 疵点报告。
+                  </p>
+                </div>
               </div>
             </div>
+          </section>
+        </div>
+
+        <!-- 右列：检测结果 -->
+        <section class="panel fabric-result-panel">
+          <div class="panel-head">
+            <AppIcon name="check" :size="14" />
+            <strong>检测结果</strong>
+            <span v-if="detecting" class="head-status">检测中…</span>
+          </div>
+
+          <!-- 未开始时的引导 -->
+          <div v-if="!result && !detecting" class="result-empty">
+            <AppIcon name="fabric" :size="28" />
+            <strong>等待上传图片开始检测</strong>
+            <small>上传图片并点击“开始疵点检测”后，报告将在此处实时展示</small>
+          </div>
+
+          <!-- 识别中的骨架屏 -->
+          <div v-else-if="detecting && !result" class="result-empty">
+            <span class="skeleton-spinner"></span>
+            <strong>后端 qwen-vl 正在分析布面…</strong>
+            <small>一般 3–8 秒完成，大图可能更久</small>
+          </div>
+
+          <!-- 真实结果 -->
+          <div v-else-if="result" :class="['detect-result', result.status]">
+            <div class="result-head">
+              <AppIcon :name="result.status === 'done' ? 'check' : 'bulb'" :size="14" />
+              <strong>{{ result.title }}</strong>
+            </div>
+            <p>{{ result.message }}</p>
+            <template v-if="result.report">
+              <div class="defect-list">
+                <div v-for="defect in result.report.defects" :key="defect.name" class="defect-item">
+                  <span :class="['defect-dot', defect.grade]"></span>
+                  <strong>{{ defect.name }}</strong>
+                  <em>{{ defect.position }}</em>
+                  <small :class="defect.grade">{{ gradeLabel(defect.grade) }}</small>
+                </div>
+              </div>
+              <div class="result-foot">
+                综合评定：<strong>{{ result.report.verdict }}</strong>
+              </div>
+            </template>
           </div>
         </section>
       </div>
@@ -308,9 +332,68 @@ export default {
   width: 100%;
   margin-top: 30px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
+}
+
+.fabric-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.fabric-result-panel {
+  position: sticky;
+  top: 8px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+}
+
+.head-status {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--c-primary);
+  font-weight: 600;
+}
+
+.result-empty {
+  flex: 1;
+  padding: 40px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--c-text-3);
+}
+
+.result-empty strong {
+  font-size: 13px;
+  color: var(--c-text-2);
+  margin-top: 4px;
+}
+
+.result-empty small {
+  font-size: 11.5px;
+  line-height: 1.7;
+  max-width: 320px;
+}
+
+.skeleton-spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(47, 84, 150, 0.15);
+  border-top-color: var(--c-primary);
+  animation: fabric-spin 0.9s linear infinite;
+}
+
+@keyframes fabric-spin {
+  to { transform: rotate(360deg); }
 }
 
 .panel {
@@ -471,6 +554,7 @@ export default {
 
 /* 检测结果 */
 .detect-result {
+  margin: 16px 18px 20px;
   padding: 13px 15px;
   border-radius: 13px;
   font-size: 12.5px;
@@ -690,6 +774,10 @@ export default {
 @media (max-width: 900px) {
   .fabric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .fabric-result-panel {
+    position: static;
   }
 
   .ability-grid {
