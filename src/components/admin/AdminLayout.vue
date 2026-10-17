@@ -142,16 +142,6 @@ const LOCAL_NAV = [
     items: [
       { route: 'admin-dashboard', label: 'Dashboard', icon: 'grid' },
       { route: 'admin-knowledge', label: '知识库管理', icon: 'database' },
-      { route: 'admin-intents', label: '意图管理', icon: 'layers' },
-      {
-        key: 'channel',
-        label: '数据通道',
-        icon: 'flow',
-        children: [
-          { route: 'admin-pipelines', label: '流水线管理', icon: 'flow' },
-          { route: 'admin-tasks', label: '流水线任务', icon: 'tasks' }
-        ]
-      },
       { route: 'admin-keywords', label: '关键词映射', icon: 'key' },
       { route: 'admin-traces', label: '链路追踪', icon: 'trace' }
     ]
@@ -190,7 +180,7 @@ export default {
     return {
       collapsed: false,
       navKeyword: '',
-      openKeys: { channel: true }
+      openKeys: {}
     }
   },
   computed: {
