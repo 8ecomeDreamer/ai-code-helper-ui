@@ -49,12 +49,13 @@
       <div class="input-toolbar">
         <div class="tool-group">
           <button
-            :class="['tool-btn', { active: recording, denied: !micEnabled }]"
+            :class="['tool-btn', { active: recording, busy: transcribing, denied: !micEnabled }]"
             :title="micTitle"
             @click="toggleMic"
           >
             <AppIcon :name="recording ? 'stop' : 'mic'" :size="15" />
             <span v-if="recording" class="tool-label">聆听中</span>
+            <span v-else-if="transcribing" class="tool-label">识别中</span>
           </button>
           <!-- 图片按钮：粘贴或选择图片，最多 10 张 -->
           <button
@@ -121,6 +122,8 @@
 
 <script>
 import AppIcon from './AppIcon.vue'
+import { PcmWavRecorder } from '../utils/audio.js'
+import { recognizeSpeech } from '../api/chatApi.js'
 
 const MAX_IMAGES = 10
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 单文件 20MB
@@ -164,8 +167,10 @@ export default {
       inputMessage: '',
       focused: false,
       recording: false,
+      transcribing: false,
+      // 录音器实例（PCM 采集 → 16k WAV，接百炼 ASR）
+      recorder: null,
       interim: '',
-      recognition: null,
       // 图片附件：[{ id, file, src, name }]
       images: [],
       // 文件附件：[{ id, file, name, size }]
@@ -177,7 +182,8 @@ export default {
   computed: {
     micTitle() {
       if (!this.micEnabled) return '当前权限未开放语音输入'
-      return this.recording ? '停止语音输入' : '语音输入'
+      if (this.transcribing) return '语音识别中...'
+      return this.recording ? '停止语音输入并识别' : '语音输入'
     },
     hasImages() {
       return this.images.length > 0
@@ -345,50 +351,62 @@ export default {
         textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px'
       })
     },
-    toggleMic() {
+    /**
+     * 语音输入：录音（Web Audio 采 PCM → 16k WAV）后上送 /ai/asr 由百炼 paraformer 识别。
+     * 原 Web Speech API 依赖 Google 语音服务，国内网络基本不可用，改走服务端 ASR。
+     */
+    async toggleMic() {
       if (!this.micEnabled) {
         this.$emit('notify', '当前账号权限未开放语音输入功能', 'error')
         return
       }
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (!SpeechRecognition) {
-        this.$emit('notify', '当前浏览器不支持语音识别，推荐使用 Chrome 浏览器')
-        return
-      }
+      if (this.transcribing) return
       if (this.recording) {
-        this.recognition && this.recognition.stop()
+        this.stopAndRecognize()
         return
       }
-      const recognition = new SpeechRecognition()
-      recognition.lang = 'zh-CN'
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.onresult = event => {
-        let finalText = ''
-        let interimText = ''
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i]
-          if (result.isFinal) finalText += result[0].transcript
-          else interimText += result[0].transcript
-        }
-        if (finalText) {
-          this.inputMessage += finalText
-          this.adjustHeight()
-        }
-        this.interim = interimText
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        this.$emit('notify', '当前浏览器不支持录音，推荐使用 Chrome/Edge', 'error')
+        return
       }
-      recognition.onend = () => {
-        this.recording = false
-        this.interim = ''
+      const recorder = new PcmWavRecorder()
+      try {
+        await recorder.start()
+      } catch (err) {
+        const denied = err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+        this.$emit('notify', denied ? '麦克风权限被拒绝，请在浏览器地址栏允许后重试' : `录音启动失败：${err.message || err}`, 'error')
+        return
       }
-      recognition.onerror = event => {
-        this.recording = false
-        this.interim = ''
-        this.$emit('notify', `语音识别出错：${event.error}`)
-      }
-      this.recognition = recognition
-      recognition.start()
+      this.recorder = recorder
       this.recording = true
+      this.interim = '请说话，再次点击结束并识别'
+    },
+    /** 停止录音 → 上传识别 → 文本追加进输入框 */
+    async stopAndRecognize() {
+      const recorder = this.recorder
+      this.recorder = null
+      this.recording = false
+      this.interim = ''
+      if (!recorder) return
+      this.transcribing = true
+      try {
+        const wavBlob = await recorder.stop()
+        if (!wavBlob || wavBlob.size < 2000) {
+          this.$emit('notify', '录音时间太短，请长按后说话再试', 'error')
+          return
+        }
+        const text = await recognizeSpeech(wavBlob)
+        if (text) {
+          this.inputMessage = this.inputMessage ? `${this.inputMessage} ${text}` : text
+          this.adjustHeight()
+        } else {
+          this.$emit('notify', '未识别到有效语音内容', 'error')
+        }
+      } catch (err) {
+        this.$emit('notify', `语音识别失败：${err.message || err}`, 'error')
+      } finally {
+        this.transcribing = false
+      }
     },
     openPreview(src) {
       this.previewSrc = src
@@ -401,9 +419,10 @@ export default {
     this.adjustHeight()
   },
   beforeUnmount() {
-    if (this.recognition) {
-      this.recognition.onend = null
-      this.recognition.abort()
+    // 录音未结束时卸载：释放麦克风与 AudioContext，防资源泄漏
+    if (this.recorder) {
+      this.recorder.stop().catch(() => {})
+      this.recorder = null
     }
     // 释放图片预览 URL
     this.images.forEach(img => img.src && URL.revokeObjectURL(img.src))
@@ -505,6 +524,11 @@ export default {
   color: #fff;
   background: var(--c-accent);
   border-color: var(--c-accent);
+}
+
+.tool-btn.busy {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .tool-btn.denied {

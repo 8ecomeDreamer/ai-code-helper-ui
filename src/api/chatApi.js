@@ -43,6 +43,10 @@ export function chatWithSSE(memoryId, message, onMessage, onError, onClose) {
         memoryId: memoryId,
         message: message
     })
+    // EventSource 无法携带请求头：登录态下以 token 查询参数传递，
+    // 后端 /ai/** 可选鉴权拦截器据此记名（会话归属用户），匿名时不追加
+    const sseToken = localStorage.getItem(TOKEN_KEY)
+    if (sseToken) params.set('token', sseToken)
 
     // 创建 EventSource 连接
     const eventSource = new EventSource(`${API_BASE_URL}/ai/chat?${params}`)
@@ -197,6 +201,29 @@ export async function uploadFile(file, prefix = 'common') {
         throw new Error(data.msg || data.message || '上传失败')
     }
     return data.data || data
+}
+
+/**
+ * 语音识别：上传 wav 音频 Blob（16k 单声道，见 utils/audio.js），返回识别文本。
+ * 走 /ai/asr（免鉴权），后端调百炼 paraformer 同步识别。
+ * @param {Blob} wavBlob WAV 音频 Blob
+ * @returns {Promise<string>} 识别出的文本
+ */
+export async function recognizeSpeech(wavBlob) {
+    const formData = new FormData()
+    formData.append('file', wavBlob, 'speech.wav')
+
+    const response = await axios.post(`${API_BASE_URL}/ai/asr`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000
+    })
+
+    const data = response.data
+    // Result 信封 { code, msg, data: { text } }
+    if (data && data.code !== undefined && data.code !== 200 && data.code !== 0) {
+        throw new Error(data.msg || '语音识别失败')
+    }
+    return (data && data.data && data.data.text) || ''
 }
 
 /**
